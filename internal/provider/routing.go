@@ -113,6 +113,54 @@ func (a Allowance) Full(model string, share float64, now time.Time) time.Time {
 	return t
 }
 
+// budgetSpan is the shortest window that is a budget rather than a rate
+// cap: the week (Kiro's month too), not the five hours in it — what the
+// five hours leave at their reset is nothing lost.
+const budgetSpan = 24 * time.Hour
+
+// FreshPace is the pace of an account with a whole week ahead of it:
+// what one not known counts as.
+const FreshPace = 100 / (7 * 24.0)
+
+// Pace is the share of its week an account has left for model, per hour
+// until that week renews: the rate it would have to be used at to spend
+// the week just in time, so the account with the highest has the most to
+// lose at its reset. Of several weekly windows that count the model
+// (Opus's own beside the general), the tightest. A week not started, or
+// whose reset isn't known, is taken to run its whole span from now. An
+// account whose vendor tells no window a day or longer (Claude's own usage
+// command gives the five hours alone) is taken to have a week not started
+// with the share its fullest window has used: those go by what they have
+// used, as they did, among the rest as the fresh are.
+func (a Allowance) Pace(model string, now time.Time) float64 {
+	model = strings.ToLower(model)
+	pace, any, used := 0.0, false, 0.0
+	for _, l := range a {
+		if !l.applies(model) {
+			continue
+		}
+		u := min(100, max(0, l.Used))
+		if !l.Resets.IsZero() && !l.Resets.After(now) {
+			u = 0 // its reset has passed: empty again
+		}
+		if l.Span < budgetSpan {
+			used = max(used, u)
+			continue
+		}
+		until := l.Span
+		if l.Resets.After(now) {
+			until = l.Resets.Sub(now)
+		}
+		if p := (100 - u) / until.Hours(); !any || p < pace {
+			pace, any = p, true
+		}
+	}
+	if !any {
+		return (100 - used) / (7 * 24)
+	}
+	return pace
+}
+
 // Allowances is each of an agent's accounts' allowance by user, as last
 // known, asked for again in the background when that was over a minute
 // ago. Only the very first ask waits, and not for long. An account

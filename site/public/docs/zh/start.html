@@ -158,7 +158,7 @@
       <tr><td>智能 <code>smart</code></td><td>默认。把所有成员的账号和 Key 放在一起排：还有余量的订阅里，额度最先重置的排第一；失败后在休息的排最后。</td></tr>
       <tr><td>按顺序 <code>order</code></td><td>先用第一个模型，它答不了再换下一个。</td></tr>
       <tr><td>轮流 <code>rotate</code></td><td>会话的每一轮交给下一个成员的账号或 Key，均摊负载。</td></tr>
-      <tr><td>最少使用 <code>usage</code></td><td>剩余额度最多的账号或 Key 排第一。</td></tr>
+      <tr><td>最少使用 <code>usage</code></td><td>每周剩余额度除以距重置的小时数，最高的账号排第一——重置时损失最多的那个；Key 按最近发给它的 token 数排。</td></tr>
     </table></div>
     <div class="table-wrap"><table>
       <tr><th>会话保持</th><th>会话在回答过它的账号或 Key 上留多久</th></tr>

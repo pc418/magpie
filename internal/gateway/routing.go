@@ -483,6 +483,7 @@ func (c candidate) allowanceKey() allowanceKey {
 type left struct {
 	used   float64
 	renews []time.Time
+	pace   float64 // least used: share of its week left per hour until it renews
 }
 
 // learns: c is a subscription whose allowance isn't known yet, of an agent
@@ -513,7 +514,7 @@ func weigh(p provider.Provider, cs []candidate, model string, from provider.Prot
 		}
 		if a, ok := known[ag][c.p.Account.User]; ok {
 			u, r := a.For(c.model, now)
-			wg.lefts[c.allowanceKey()] = left{u, r} // one not known counts as unused
+			wg.lefts[c.allowanceKey()] = left{u, r, a.Pace(c.model, now)} // one not known counts as unused
 		}
 	}
 	lefts := wg.lefts
@@ -582,8 +583,45 @@ func weigh(p provider.Provider, cs []candidate, model string, from provider.Prot
 		routed.Unlock()
 		cs = append(append([]candidate{}, cs[n:]...), cs[:n]...)
 	case provider.LeastUsed:
-		// a subscription by the share of its allowance used, as the vendor
-		// says; then, and for keys, by what magpie sent it lately
+		// a subscription by what it has left of its week per hour until
+		// that renews, the most first: it has the most to lose at the
+		// reset, where the most left alone would send a fresh account
+		// ahead of one with 80% left and an hour to go. Within a tenth
+		// alike, in their order, keeping the vendor's prompt cache warm;
+		// one all but used up last, whatever its week. Then, and for
+		// keys, by what magpie sent it lately.
+		// an account not known counts as unused, a whole week ahead of it,
+		// as it does for Smart; a key has no week
+		paceOf := func(c candidate) float64 {
+			if l, ok := lefts[c.allowanceKey()]; ok {
+				return l.pace
+			}
+			if c.p.Account != nil {
+				return provider.FreshPace
+			}
+			return 0
+		}
+		// the bands of pace alike within a tenth, the highest first: drawn
+		// before sorting, from each band's highest down, so that sorting
+		// by them is consistent — "within a tenth of each other" alone is
+		// not, three paces a twelfth apart each going round in a circle
+		byPace := make([]int, len(cs))
+		for i := range byPace {
+			byPace[i] = i
+		}
+		sort.SliceStable(byPace, func(a, b int) bool { return paceOf(cs[byPace[a]]) > paceOf(cs[byPace[b]]) })
+		band, top := make([]int, len(cs)), 0.0
+		for k, i := range byPace {
+			if p := paceOf(cs[i]); k == 0 || p < 0.9*top {
+				top = p
+				if k > 0 {
+					band[i] = band[byPace[k-1]] + 1
+					continue
+				}
+			} else {
+				band[i] = band[byPace[k-1]]
+			}
+		}
 		routed.Lock()
 		tokens := make([]float64, len(cs))
 		wg.tokens = map[string]float64{}
@@ -598,8 +636,15 @@ func weigh(p provider.Provider, cs []candidate, model string, from provider.Prot
 		}
 		sort.SliceStable(idx, func(a, b int) bool {
 			ca, cb := cs[idx[a]], cs[idx[b]]
-			if sa, sb := shareOf(ca), shareOf(cb); sa != sb {
-				return sa < sb
+			sa, sb := shareOf(ca), shareOf(cb)
+			if spa, spb := sa >= usedShare, sb >= usedShare; spa != spb {
+				return spb
+			} else if spa { // the spent by how far: the one with the least used may yet answer
+				if sa != sb {
+					return sa < sb
+				}
+			} else if band[idx[a]] != band[idx[b]] {
+				return band[idx[a]] < band[idx[b]]
 			}
 			return tokens[idx[a]] < tokens[idx[b]]
 		})

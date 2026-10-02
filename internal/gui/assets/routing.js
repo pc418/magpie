@@ -168,7 +168,7 @@
     "": ["Smart", "Smart: of the accounts with quota to spare, the one whose allowance renews soonest goes first — what it has left would be lost at the reset. One at 90% or more waits until the others can't answer; one resting after a failure goes last."],
     order: ["In order", "In order: the first answers everything until it can't; then the next."],
     rotate: ["In turn", "In turn: each conversation's next turn goes to the account after the one that answered its last, and a new conversation starts one further along; the requests within a turn stay put, keeping the prompt cache."],
-    usage: ["Least used", "Least used first: the account with the most of its allowance left goes first; a key by the tokens magpie sent it lately."],
+    usage: ["Least used", "Least used first: the account with the most of its week left for the hours until it renews goes first — the one with the most to lose at its reset; a key by the tokens magpie sent it lately."],
     manual: ["Manual", "Manual: every request goes to the model picked on the group's card, over its own accounts or keys."],
   };
   const GROUP_ORDER = "In order: member by member, the first model the group names until it can't answer, each over its own accounts or keys as its provider routes them.";
@@ -252,7 +252,10 @@
         : t("In order: {who} is first, and answers everything while it can.", { who: w });
       case "rotate": return t("In turn: it's {who}'s turn — each request starts one further along.", { who: w });
       case "usage":
-        if (f.kind === "account" && f.known) return t("Least used first: {who} has the most of its allowance left — {n} used.", { who: w, n: pct(f.used) });
+        if (f.kind === "account" && f.known) {
+          const soon = renews(f).find(Boolean);
+          return soon ? t("Least used first: {who} has the most of its week left for the hours until it renews — {n} used, renews in {d}.", { who: w, n: pct(f.used), d: dur(soon - at(r.time)) }) : t("Least used first: {who} has the most of its week left for the hours until it renews — {n} used.", { who: w, n: pct(f.used) });
+        }
         if (f.kind === "key") return t("Least used first: {who} served the fewest tokens lately — {n}.", { who: w, n: tokens(f.tokens || 0) });
         return t("Least used first: {who} goes first.", { who: w });
     }
@@ -2082,7 +2085,7 @@
     "": "Smart, over every member's accounts and keys together: of the subscriptions with quota to spare, the one whose allowance renews soonest goes first; one resting after a failure goes last.",
     order: "In order: the first model until it can't answer, then the next — each over its own accounts or keys as its provider routes them.",
     rotate: "In turn: each conversation's next turn goes to the next member's account or key, spreading the load.",
-    usage: "Least used first: the account or key with the most of its allowance left goes first.",
+    usage: "Least used first: the account with the most of its week left for the hours until it renews goes first — the one with the most to lose at its reset; a key by the tokens magpie sent it lately.",
     manual: "Manual: every request goes to the model you pick on the group's card, over its own accounts or keys; the others, and the rules, wait until you pick another — none takes over when it fails.",
   };
   const EFFORTS = ["low", "medium", "high", "xhigh", "max"]; // provider.Efforts
