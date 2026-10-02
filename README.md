@@ -430,7 +430,9 @@ magpie claude group/opus-anywhere       # use it
 `routing=` is `smart` (the default: of the subscriptions with quota to
 spare, the one whose allowance renews soonest first), `order` (the first
 model until it can't answer, then the next), `rotate` (each turn to the next
-member) or `usage` (least used first). `stays=` is how long a conversation
+member), `usage` (least used first) or `pace` (weekly pace: the account with
+the most of its week left per hour until it renews first, so less of a week
+is lost at its reset). `stays=` is how long a conversation
 stays with the key or account that answered it: `auto` (the default, while
 the vendor's cache of it is worth keeping), `session`, `turn` or `off`.
 `models=` replaces the whole list, in order; a bare model id works when only
