@@ -71,8 +71,9 @@ const groupUsage = `usage:
            order   the first model until it can't answer, then the next
            rotate  each conversation's next turn goes to the next member's account or key
            usage   the account or key with the most of its allowance left first
-           pace    the account with the most of its week left per hour until it renews first, so less
-                   of a week is lost at its reset
+           pace    each account's week used up evenly until it renews (the most left per hour until
+                   its reset first), so none runs out early and later five-hour windows still have
+                   several accounts
            manual  only the model you pick (pick=, or click it on the group's card): the others and
                    the rules wait until you pick another or route it otherwise; no failover to them
   stays    auto    (default) with the account or key that answered, while its cache is worth keeping
