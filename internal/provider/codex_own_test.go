@@ -1,12 +1,13 @@
 package provider
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"runtime"
 	"strings"
 	"sync"
@@ -171,6 +172,23 @@ func TestCodexOwnPromptInstructions(t *testing.T) {
 	if *m.Instructions != "You are a helpful assistant." || roles(m.Input) != "message:user" {
 		t.Fatalf("none: %s", out)
 	}
+	// nor in a leading message with no text: an empty string, no parts,
+	// blank text; the empty messages leave the input all the same
+	for _, lead := range []string{
+		`{"role":"developer","content":""}`,
+		`{"type":"message","role":"system","content":[]}`,
+		`{"role":"developer","content":[{"type":"input_text","text":"  \n"}]},{"role":"developer","content":"\t"}`,
+	} {
+		m, out = ownBody(t, `{"model":"gpt-5.5","input":[`+lead+`,{"role":"user","content":"hi"}]}`)
+		if *m.Instructions != "You are a helpful assistant." || roles(m.Input) != ":user" {
+			t.Fatalf("empty %s: %s", lead, out)
+		}
+	}
+	// an empty image-only lead is not text: it stays, instructions ""
+	m, out = ownBody(t, `{"model":"gpt-5.5","input":[{"role":"developer","content":[{"type":"input_image","image_url":"data:image/png;base64,iVBORw0KGgo="}]},{"role":"user","content":"hi"}]}`)
+	if *m.Instructions != "" || roles(m.Input) != ":developer,:user" {
+		t.Fatalf("image alone: %s", out)
+	}
 
 	// rule 5: the key a client didn't name is the one it gets with the
 	// setting off, from its prompt as it sent it
@@ -188,30 +206,64 @@ func TestCodexOwnPromptInstructions(t *testing.T) {
 	}
 }
 
-// With the setting off, a request carrying a codexCall is made exactly as
-// one without: the same bytes, the same headers.
+// With the setting off, a request carrying a codexCall is made byte for
+// byte as the parent commit (4561e67d) made it: testdata/codex_own_off.json
+// holds its codexBody of each body and its codexSign's headers, captured
+// from that commit, {V} and {UA} standing for the version and User-Agent
+// it derives on the machine (newerVersion, codexUserAgent: unchanged).
 func TestCodexOwnPromptOffIsCodexCLIs(t *testing.T) {
-	signIn(t)
+	home := signIn(t)
 	ownPromptSetting(t, false)
+	b, err := os.ReadFile(filepath.Join("testdata", "codex_own_off.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var fx struct {
+		CodexPrompt string `json:"codexPrompt"`
+		Bodies      []struct{ Name, In, Out string }
+		Signs       []struct {
+			Name, Version string
+			Body          *string
+			Want          map[string][]string
+		}
+	}
+	if err := json.Unmarshal(b, &fx); err != nil || len(fx.Bodies) == 0 || len(fx.Signs) == 0 {
+		t.Fatalf("fixture: %v", err)
+	}
+	writeFile(t, filepath.Join(home, ".codex", "models_cache.json"), map[string]any{"models": []any{map[string]any{
+		"slug": "gpt-5.5", "display_name": "GPT-5.5", "visibility": "list", "priority": 1,
+		"model_messages": map[string]any{"instructions_template": fx.CodexPrompt}}}})
 	p, _ := find(All(), "codex")
-	for _, codex := range []bool{false, true} {
-		in := http.Header{"User-Agent": {"codex_cli_rs/0.1.0 (Mac OS 26.6.0; arm64) kitty"}, "Originator": {"codex_cli_rs"}, "Version": {"0.1.0"}}
-		ctx := WithCodexCall(context.Background(), in, codex)
-		for _, body := range []string{piTurn, codexTurn, `{"model":"gpt-5.5","input":"hi"}`} {
-			got, want := p.PrepareFor(ctx, []byte(body)), p.Prepare([]byte(body))
-			if !bytes.Equal(got, want) {
-				t.Fatalf("body:\n%s\nwant\n%s", got, want)
+	sign := codexSign(func(context.Context) (string, string, error) { return "tok-1", "acct-1", nil })
+	in := http.Header{"User-Agent": {"codex_cli_rs/0.1.0 (Mac OS 26.6.0; arm64) kitty"}, "Originator": {"codex_cli_rs"}, "Version": {"0.1.0"}}
+	for _, ctx := range []context.Context{context.Background(), WithCodexCall(context.Background(), in, false), WithCodexCall(context.Background(), in, true)} {
+		for _, c := range fx.Bodies {
+			if got := p.PrepareFor(ctx, []byte(c.In)); string(got) != c.Out {
+				t.Fatalf("%s:\n%s\nwant the parent's\n%s", c.Name, got, c.Out)
 			}
-			sign := func(ctx context.Context) http.Header {
-				req, _ := http.NewRequest("POST", p.Responses+"/responses", nil)
-				req.Header.Set("version", "0.1.0")
-				if err := p.Sign(ctx, req, Responses, want); err != nil {
-					t.Fatal(err)
+		}
+		for _, c := range fx.Signs {
+			req, _ := http.NewRequest("POST", "https://chatgpt.com/backend-api/codex/responses", nil)
+			req.Header.Set("session_id", "relayed")
+			if c.Version != "" {
+				req.Header.Set("version", c.Version)
+			}
+			var body []byte
+			if c.Body != nil {
+				body = []byte(*c.Body)
+			}
+			if err := sign(ctx, req, body); err != nil {
+				t.Fatal(err)
+			}
+			v := newerVersion(codexVersion(), c.Version)
+			want := http.Header{}
+			for k, vs := range c.Want {
+				for _, x := range vs {
+					want.Add(k, strings.NewReplacer("{UA}", codexUserAgent(v), "{V}", v).Replace(x))
 				}
-				return req.Header
 			}
-			if g, w := sign(ctx), sign(context.Background()); !equalHeaders(g, w) {
-				t.Fatalf("headers %v, want %v", g, w)
+			if !equalHeaders(req.Header, want) {
+				t.Fatalf("%s: headers\n%v\nwant the parent's\n%v", c.Name, req.Header, want)
 			}
 		}
 	}
@@ -294,6 +346,17 @@ func TestCodexOwnPromptReadOnceARequest(t *testing.T) {
 	}
 	if !strings.Contains(string(body), `"instructions":"You are Pi."`) || reads != 1 {
 		t.Fatalf("%d reads: %s", reads, body)
+	}
+
+	// the next request reads it again, now off: Codex's prompt and name
+	next := WithCodexCall(context.Background(), http.Header{"User-Agent": {"pi/0.75.0"}}, false)
+	body = p.PrepareFor(next, []byte(piTurn))
+	req, _ := http.NewRequest("POST", p.Responses+"/responses", nil)
+	if err := p.Sign(next, req, Responses, body); err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(body), `"instructions":"You are Pi."`) || req.Header.Get("originator") != "codex_cli_rs" || reads != 2 {
+		t.Fatalf("%d reads; next request %v: %s", reads, req.Header, body)
 	}
 }
 
