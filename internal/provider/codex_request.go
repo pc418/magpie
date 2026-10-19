@@ -39,12 +39,16 @@ func codexSign(token func(context.Context) (tok, accountID string, err error)) f
 			req.Header.Set("chatgpt-account-id", accountID)
 		}
 		req.Header.Set("OpenAI-Beta", "responses=experimental")
-		req.Header.Set("originator", "codex_cli_rs")
-		// the version and the User-Agent name one Codex, never older than
-		// the client whose request this is (its version header, relayed)
-		ver := newerVersion(codexVersion(), req.Header.Get("version"))
-		req.Header.Set("version", ver)
-		req.Header.Set("User-Agent", codexUserAgent(ver))
+		if c := codexCallOf(ctx); c.ownPrompt() {
+			c.identify(req.Header) // magpie's name, or Codex's own (codex_own.go)
+		} else {
+			req.Header.Set("originator", "codex_cli_rs")
+			// the version and the User-Agent name one Codex, never older than
+			// the client whose request this is (its version header, relayed)
+			ver := newerVersion(codexVersion(), req.Header.Get("version"))
+			req.Header.Set("version", ver)
+			req.Header.Set("User-Agent", codexUserAgent(ver))
+		}
 		if body == nil {
 			return nil
 		}
@@ -249,7 +253,11 @@ func codexInstructions(model string) string {
 // instructions — the client's own riding first in the input — and rejects
 // the sampling knobs, explicit cache options and any service tier but
 // Fast's and Ultrafast's.
-func codexBody(body []byte) []byte {
+func codexBody(body []byte) []byte { return codexBodyAs(body, false) }
+
+// codexBodyAs is codexBody, with the agent's own instructions in place of
+// Codex's when agentPrompt (codex_own.go).
+func codexBodyAs(body []byte, agentPrompt bool) []byte {
 	dec := json.NewDecoder(bytes.NewReader(body))
 	dec.UseNumber()
 	var m map[string]any
@@ -275,6 +283,13 @@ func codexBody(body []byte) []byte {
 			"content": []any{map[string]any{"type": "input_text", "text": s}}}}
 	}
 	input, _ := m["input"].([]any)
+	var prompt string
+	var lead int
+	var liftable bool
+	if agentPrompt {
+		// read before codexInput makes every system message developer
+		prompt, lead, liftable = leadingPrompt(input)
+	}
 	input = codexInput(input)
 	own, _ := m["instructions"].(string)
 	if k, _ := m["prompt_cache_key"].(string); k == "" {
@@ -286,7 +301,9 @@ func codexBody(body []byte) []byte {
 	// the client's instructions go first as a developer message, Codex's
 	// in their place — unless they are Codex's, from Codex itself
 	codex := codexInstructions(model)
-	if strings.TrimSpace(own) != "" {
+	if agentPrompt {
+		codex, input = agentInstructions(own, input, prompt, lead, liftable)
+	} else if strings.TrimSpace(own) != "" {
 		if firstLine(own) == firstLine(codex) {
 			codex = own
 		} else {
@@ -298,7 +315,7 @@ func codexBody(body []byte) []byte {
 		input = []any{}
 	}
 	m["input"] = input
-	if codex != "" {
+	if codex != "" || agentPrompt {
 		m["instructions"] = codex
 	}
 	m["store"] = false

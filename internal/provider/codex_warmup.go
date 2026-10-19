@@ -440,7 +440,9 @@ func warmCodex(ctx context.Context, sign func(context.Context, *http.Request, []
 		in["reasoning"] = map[string]any{"effort": effort}
 	}
 	b, _ := json.Marshal(in)
-	body := codexBody(b)
+	// magpie's own request, as the setting has it (codex_own.go)
+	ctx = withMagpieCall(ctx)
+	body := codexBodyAs(b, codexCallOf(ctx).ownPrompt())
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, CodexBase+"/responses", bytes.NewReader(body))
 	if err != nil {
 		return err
