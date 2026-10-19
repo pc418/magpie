@@ -1,0 +1,178 @@
+{
+ "bodies": [
+  {
+   "in": "{\"model\":\"gpt-5.5\",\"stream\":true,\"store\":false,\"prompt_cache_key\":\"pi-session-1\",\"input\":[{\"role\":\"developer\",\"content\":\"You are Pi.\"},{\"role\":\"user\",\"content\":[{\"type\":\"input_text\",\"text\":\"what is this?\"},{\"type\":\"input_image\",\"detail\":\"auto\",\"image_url\":\"data:image/png;base64,iVBORw0KGgo=\"}]},{\"type\":\"reasoning\",\"id\":\"rs_1\",\"summary\":[],\"encrypted_content\":\"enc-1\"},{\"type\":\"message\",\"role\":\"assistant\",\"content\":[{\"type\":\"output_text\",\"text\":\"Let me look.\",\"annotations\":[]}],\"status\":\"completed\",\"id\":\"msg_1\"},{\"type\":\"function_call\",\"id\":\"fc_1\",\"call_id\":\"call_1\",\"name\":\"read\",\"arguments\":\"{\\\"path\\\":\\\"a.png\\\"}\"},{\"type\":\"function_call_output\",\"call_id\":\"call_1\",\"output\":\"PNG\"}],\"tools\":[{\"type\":\"function\",\"name\":\"read\",\"description\":\"Read a file\",\"parameters\":{\"type\":\"object\",\"properties\":{\"path\":{\"type\":\"string\"}}},\"strict\":false}],\"reasoning\":{\"effort\":\"high\",\"summary\":\"auto\"},\"include\":[\"reasoning.encrypted_content\"],\"max_output_tokens\":32000}",
+   "name": "pi",
+   "out": "{\"include\":[\"reasoning.encrypted_content\"],\"input\":[{\"content\":\"You are Pi.\",\"role\":\"developer\"},{\"content\":[{\"text\":\"what is this?\",\"type\":\"input_text\"},{\"detail\":\"auto\",\"image_url\":\"data:image/png;base64,iVBORw0KGgo=\",\"type\":\"input_image\"}],\"role\":\"user\"},{\"encrypted_content\":\"enc-1\",\"summary\":[],\"type\":\"reasoning\"},{\"content\":[{\"annotations\":[],\"text\":\"Let me look.\",\"type\":\"output_text\"}],\"role\":\"assistant\",\"status\":\"completed\",\"type\":\"message\"},{\"arguments\":\"{\\\"path\\\":\\\"a.png\\\"}\",\"call_id\":\"call_1\",\"name\":\"read\",\"type\":\"function_call\"},{\"call_id\":\"call_1\",\"output\":\"PNG\",\"type\":\"function_call_output\"}],\"instructions\":\"You are Codex, an agent based on GPT-5. You and the user share one workspace, and your job is to collaborate with them until their goal is genuinely handled.\\nMore.\",\"model\":\"gpt-5.5\",\"parallel_tool_calls\":true,\"prompt_cache_key\":\"pi-session-1\",\"reasoning\":{\"effort\":\"high\",\"summary\":\"auto\"},\"store\":false,\"stream\":true,\"text\":{\"verbosity\":\"medium\"},\"tool_choice\":\"auto\",\"tools\":[{\"description\":\"Read a file\",\"name\":\"read\",\"parameters\":{\"properties\":{\"path\":{\"type\":\"string\"}},\"type\":\"object\"},\"strict\":false,\"type\":\"function\"}]}"
+  },
+  {
+   "in": "{\"model\":\"gpt-5.5\",\"stream\":true,\"store\":false,\"input\":[{\"role\":\"developer\",\"content\":\"You are Pi.\"},{\"role\":\"user\",\"content\":[{\"type\":\"input_text\",\"text\":\"what is this?\"},{\"type\":\"input_image\",\"detail\":\"auto\",\"image_url\":\"data:image/png;base64,iVBORw0KGgo=\"}]},{\"type\":\"reasoning\",\"id\":\"rs_1\",\"summary\":[],\"encrypted_content\":\"enc-1\"},{\"type\":\"message\",\"role\":\"assistant\",\"content\":[{\"type\":\"output_text\",\"text\":\"Let me look.\",\"annotations\":[]}],\"status\":\"completed\",\"id\":\"msg_1\"},{\"type\":\"function_call\",\"id\":\"fc_1\",\"call_id\":\"call_1\",\"name\":\"read\",\"arguments\":\"{\\\"path\\\":\\\"a.png\\\"}\"},{\"type\":\"function_call_output\",\"call_id\":\"call_1\",\"output\":\"PNG\"}],\"tools\":[{\"type\":\"function\",\"name\":\"read\",\"description\":\"Read a file\",\"parameters\":{\"type\":\"object\",\"properties\":{\"path\":{\"type\":\"string\"}}},\"strict\":false}],\"reasoning\":{\"effort\":\"high\",\"summary\":\"auto\"},\"include\":[\"reasoning.encrypted_content\"],\"max_output_tokens\":32000}",
+   "name": "pi-keyless",
+   "out": "{\"include\":[\"reasoning.encrypted_content\"],\"input\":[{\"content\":\"You are Pi.\",\"role\":\"developer\"},{\"content\":[{\"text\":\"what is this?\",\"type\":\"input_text\"},{\"detail\":\"auto\",\"image_url\":\"data:image/png;base64,iVBORw0KGgo=\",\"type\":\"input_image\"}],\"role\":\"user\"},{\"encrypted_content\":\"enc-1\",\"summary\":[],\"type\":\"reasoning\"},{\"content\":[{\"annotations\":[],\"text\":\"Let me look.\",\"type\":\"output_text\"}],\"role\":\"assistant\",\"status\":\"completed\",\"type\":\"message\"},{\"arguments\":\"{\\\"path\\\":\\\"a.png\\\"}\",\"call_id\":\"call_1\",\"name\":\"read\",\"type\":\"function_call\"},{\"call_id\":\"call_1\",\"output\":\"PNG\",\"type\":\"function_call_output\"}],\"instructions\":\"You are Codex, an agent based on GPT-5. You and the user share one workspace, and your job is to collaborate with them until their goal is genuinely handled.\\nMore.\",\"model\":\"gpt-5.5\",\"parallel_tool_calls\":true,\"prompt_cache_key\":\"b8917ec2-6966-dbd7-f8ba-0daa643a1d6e\",\"reasoning\":{\"effort\":\"high\",\"summary\":\"auto\"},\"store\":false,\"stream\":true,\"text\":{\"verbosity\":\"medium\"},\"tool_choice\":\"auto\",\"tools\":[{\"description\":\"Read a file\",\"name\":\"read\",\"parameters\":{\"properties\":{\"path\":{\"type\":\"string\"}},\"type\":\"object\"},\"strict\":false,\"type\":\"function\"}]}"
+  },
+  {
+   "in": "{\"model\": \"gpt-5.5\", \"instructions\": \"You are Codex, an agent based on GPT-5. You and the user share one workspace, and your job is to collaborate with them until their goal is genuinely handled.\\nMore.\", \"input\": [{\"type\": \"message\", \"role\": \"developer\", \"content\": [{\"type\": \"input_text\", \"text\": \"\u003cpermissions instructions\u003e\\nFilesystem sandboxing: workspace-write.\\n\u003c/permissions instructions\u003e\"}]}, {\"type\": \"message\", \"role\": \"user\", \"content\": [{\"type\": \"input_text\", \"text\": \"fix the test\"}]}], \"tools\": [], \"tool_choice\": \"auto\", \"parallel_tool_calls\": false, \"reasoning\": {\"effort\": \"medium\", \"summary\": \"auto\"}, \"store\": false, \"stream\": true, \"include\": [\"reasoning.encrypted_content\"], \"prompt_cache_key\": \"019a-thread\"}",
+   "name": "codex-cli",
+   "out": "{\"include\":[\"reasoning.encrypted_content\"],\"input\":[{\"content\":[{\"text\":\"\\u003cpermissions instructions\\u003e\\nFilesystem sandboxing: workspace-write.\\n\\u003c/permissions instructions\\u003e\",\"type\":\"input_text\"}],\"role\":\"developer\",\"type\":\"message\"},{\"content\":[{\"text\":\"fix the test\",\"type\":\"input_text\"}],\"role\":\"user\",\"type\":\"message\"}],\"instructions\":\"You are Codex, an agent based on GPT-5. You and the user share one workspace, and your job is to collaborate with them until their goal is genuinely handled.\\nMore.\",\"model\":\"gpt-5.5\",\"parallel_tool_calls\":false,\"prompt_cache_key\":\"019a-thread\",\"reasoning\":{\"effort\":\"medium\",\"summary\":\"auto\"},\"store\":false,\"stream\":true,\"text\":{\"verbosity\":\"medium\"},\"tool_choice\":\"auto\",\"tools\":[]}"
+  },
+  {
+   "in": "{\"model\": \"gpt-5.5\", \"instructions\": \"You are Claude Code, Anthropic's official CLI for Claude.\\n\\nBe brief.  \", \"input\": [{\"type\": \"message\", \"role\": \"user\", \"content\": [{\"type\": \"input_text\", \"text\": \"hi\"}]}], \"stream\": true}",
+   "name": "translated",
+   "out": "{\"include\":[\"reasoning.encrypted_content\"],\"input\":[{\"content\":[{\"text\":\"You are Claude Code, Anthropic's official CLI for Claude.\\n\\nBe brief.  \",\"type\":\"input_text\"}],\"role\":\"developer\",\"type\":\"message\"},{\"content\":[{\"text\":\"hi\",\"type\":\"input_text\"}],\"role\":\"user\",\"type\":\"message\"}],\"instructions\":\"You are Codex, an agent based on GPT-5. You and the user share one workspace, and your job is to collaborate with them until their goal is genuinely handled.\\nMore.\",\"model\":\"gpt-5.5\",\"parallel_tool_calls\":true,\"prompt_cache_key\":\"5692be19-e74f-8602-7bfd-b8aa59144620\",\"store\":false,\"stream\":true,\"text\":{\"verbosity\":\"medium\"},\"tool_choice\":\"auto\"}"
+  },
+  {
+   "in": "{\"model\": \"gpt-5.5\", \"input\": [{\"role\": \"developer\", \"content\": [{\"type\": \"input_text\", \"text\": \"You are Pi.\"}, {\"type\": \"input_image\", \"image_url\": \"data:image/png;base64,iVBORw0KGgo=\"}]}, {\"role\": \"user\", \"content\": \"what is it?\"}]}",
+   "name": "image-lead",
+   "out": "{\"include\":[\"reasoning.encrypted_content\"],\"input\":[{\"content\":[{\"text\":\"You are Pi.\",\"type\":\"input_text\"},{\"image_url\":\"data:image/png;base64,iVBORw0KGgo=\",\"type\":\"input_image\"}],\"role\":\"developer\"},{\"content\":\"what is it?\",\"role\":\"user\"}],\"instructions\":\"You are Codex, an agent based on GPT-5. You and the user share one workspace, and your job is to collaborate with them until their goal is genuinely handled.\\nMore.\",\"model\":\"gpt-5.5\",\"parallel_tool_calls\":true,\"prompt_cache_key\":\"597344f1-ae38-27f5-fafc-e2e3058a513e\",\"store\":false,\"stream\":true,\"text\":{\"verbosity\":\"medium\"},\"tool_choice\":\"auto\"}"
+  },
+  {
+   "in": "{\"model\": \"gpt-5.5\", \"input\": [{\"type\": \"message\", \"role\": \"system\", \"content\": \"You are Aider.\"}, {\"type\": \"message\", \"role\": \"developer\", \"content\": \"Edit in place.\"}, {\"type\": \"message\", \"role\": \"user\", \"content\": \"go\"}]}",
+   "name": "mixed",
+   "out": "{\"include\":[\"reasoning.encrypted_content\"],\"input\":[{\"content\":\"You are Aider.\",\"role\":\"developer\",\"type\":\"message\"},{\"content\":\"Edit in place.\",\"role\":\"developer\",\"type\":\"message\"},{\"content\":\"go\",\"role\":\"user\",\"type\":\"message\"}],\"instructions\":\"You are Codex, an agent based on GPT-5. You and the user share one workspace, and your job is to collaborate with them until their goal is genuinely handled.\\nMore.\",\"model\":\"gpt-5.5\",\"parallel_tool_calls\":true,\"prompt_cache_key\":\"31a4dc91-d555-2d25-f252-c5c5315f442b\",\"store\":false,\"stream\":true,\"text\":{\"verbosity\":\"medium\"},\"tool_choice\":\"auto\"}"
+  },
+  {
+   "in": "{\"model\": \"gpt-5.5\", \"input\": [{\"role\": \"developer\", \"content\": \"\"}, {\"role\": \"user\", \"content\": \"hi\"}]}",
+   "name": "empty-lead",
+   "out": "{\"include\":[\"reasoning.encrypted_content\"],\"input\":[{\"content\":\"\",\"role\":\"developer\"},{\"content\":\"hi\",\"role\":\"user\"}],\"instructions\":\"You are Codex, an agent based on GPT-5. You and the user share one workspace, and your job is to collaborate with them until their goal is genuinely handled.\\nMore.\",\"model\":\"gpt-5.5\",\"parallel_tool_calls\":true,\"prompt_cache_key\":\"77eb20bd-4629-2305-45dc-39be841f9bbe\",\"store\":false,\"stream\":true,\"text\":{\"verbosity\":\"medium\"},\"tool_choice\":\"auto\"}"
+  },
+  {
+   "in": "{\"model\": \"gpt-5.5\", \"input\": \"hi\", \"max_output_tokens\": 5, \"temperature\": 0.1, \"service_tier\": \"flex\", \"reasoning\": {\"effort\": \"ultra\"}}",
+   "name": "string-input",
+   "out": "{\"include\":[\"reasoning.encrypted_content\"],\"input\":[{\"content\":[{\"text\":\"hi\",\"type\":\"input_text\"}],\"role\":\"user\",\"type\":\"message\"}],\"instructions\":\"You are Codex, an agent based on GPT-5. You and the user share one workspace, and your job is to collaborate with them until their goal is genuinely handled.\\nMore.\",\"model\":\"gpt-5.5\",\"parallel_tool_calls\":true,\"prompt_cache_key\":\"c12dc832-a353-6f7c-97db-6d52e8e861f1\",\"reasoning\":{\"effort\":\"max\",\"summary\":\"auto\"},\"store\":false,\"stream\":true,\"text\":{\"verbosity\":\"medium\"},\"tool_choice\":\"auto\"}"
+  }
+ ],
+ "codexPrompt": "You are Codex, an agent based on GPT-5. You and the user share one workspace, and your job is to collaborate with them until their goal is genuinely handled.\nMore.",
+ "note": "Inputs, and what the parent 4561e67d made of them (codexBody, codexSign): the setting off is that, byte for byte. {V} and {UA} stand for the version and the User-Agent codexSign derives on the machine (newerVersion(codexVersion(), relayed), codexUserAgent).",
+ "signs": [
+  {
+   "body": "{\"prompt_cache_key\":\"thread-1\"}",
+   "name": "turn",
+   "version": "",
+   "want": {
+    "Accept": [
+     "text/event-stream"
+    ],
+    "Authorization": [
+     "Bearer tok-1"
+    ],
+    "Chatgpt-Account-Id": [
+     "acct-1"
+    ],
+    "Openai-Beta": [
+     "responses=experimental"
+    ],
+    "Originator": [
+     "codex_cli_rs"
+    ],
+    "Session-Id": [
+     "thread-1"
+    ],
+    "Thread-Id": [
+     "thread-1"
+    ],
+    "User-Agent": [
+     "{UA}"
+    ],
+    "Version": [
+     "{V}"
+    ]
+   }
+  },
+  {
+   "body": "{\"prompt_cache_key\":\"thread-1\"}",
+   "name": "turn-older-version",
+   "version": "0.1.0",
+   "want": {
+    "Accept": [
+     "text/event-stream"
+    ],
+    "Authorization": [
+     "Bearer tok-1"
+    ],
+    "Chatgpt-Account-Id": [
+     "acct-1"
+    ],
+    "Openai-Beta": [
+     "responses=experimental"
+    ],
+    "Originator": [
+     "codex_cli_rs"
+    ],
+    "Session-Id": [
+     "thread-1"
+    ],
+    "Thread-Id": [
+     "thread-1"
+    ],
+    "User-Agent": [
+     "{UA}"
+    ],
+    "Version": [
+     "{V}"
+    ]
+   }
+  },
+  {
+   "body": "{\"prompt_cache_key\":\"thread-1\"}",
+   "name": "turn-newer-version",
+   "version": "9.9.9",
+   "want": {
+    "Accept": [
+     "text/event-stream"
+    ],
+    "Authorization": [
+     "Bearer tok-1"
+    ],
+    "Chatgpt-Account-Id": [
+     "acct-1"
+    ],
+    "Openai-Beta": [
+     "responses=experimental"
+    ],
+    "Originator": [
+     "codex_cli_rs"
+    ],
+    "Session-Id": [
+     "thread-1"
+    ],
+    "Thread-Id": [
+     "thread-1"
+    ],
+    "User-Agent": [
+     "{UA}"
+    ],
+    "Version": [
+     "{V}"
+    ]
+   }
+  },
+  {
+   "body": null,
+   "name": "model-list",
+   "version": "",
+   "want": {
+    "Authorization": [
+     "Bearer tok-1"
+    ],
+    "Chatgpt-Account-Id": [
+     "acct-1"
+    ],
+    "Openai-Beta": [
+     "responses=experimental"
+    ],
+    "Originator": [
+     "codex_cli_rs"
+    ],
+    "Session_id": [
+     "relayed"
+    ],
+    "User-Agent": [
+     "{UA}"
+    ],
+    "Version": [
+     "{V}"
+    ]
+   }
+  }
+ ]
+}

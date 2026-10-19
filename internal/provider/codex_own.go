@@ -74,8 +74,8 @@ func codexCallOf(ctx context.Context) *codexCall {
 func (c *codexCall) ownPrompt() bool { return c != nil && c.on() }
 
 // identify names the request in h: Codex's own headers, relayed as Codex
-// sent them, on a request it sent; magpie's on every other, with no
-// version (a relayed one never stays).
+// sent them, on a request it sent, one it didn't send left out; magpie's
+// on every other, with no version (a relayed one never stays).
 func (c *codexCall) identify(h http.Header) {
 	if c.codex {
 		for k, vs := range map[string][]string{"originator": c.originator, "User-Agent": c.userAgent, "version": c.version} {
@@ -83,6 +83,11 @@ func (c *codexCall) identify(h http.Header) {
 			for _, v := range vs {
 				h.Add(k, v)
 			}
+		}
+		if len(c.userAgent) == 0 {
+			// an empty value, which Go's transport sends as no User-Agent
+			// at all; deleted, it would send its own Go-http-client/1.1
+			h.Set("User-Agent", "")
 		}
 		return
 	}
@@ -148,7 +153,8 @@ func leadingPrompt(input []any) (text string, n int, ok bool) {
 // with the setting on: the client's own; else the prompt its input starts
 // with, taken out of the input; "" with the input as it was when that
 // prompt can't be told as instructions; helpfulAssistant when it has no
-// prompt at all. Never Codex's.
+// prompt at all, or one with no text (its empty messages taken out all
+// the same). Never Codex's.
 func agentInstructions(own string, input []any, prompt string, n int, ok bool) (string, []any) {
 	switch {
 	case strings.TrimSpace(own) != "":
@@ -157,6 +163,8 @@ func agentInstructions(own string, input []any, prompt string, n int, ok bool) (
 		return helpfulAssistant, input
 	case !ok:
 		return "", input
+	case strings.TrimSpace(prompt) == "":
+		return helpfulAssistant, input[n:]
 	}
 	return prompt, input[n:]
 }
