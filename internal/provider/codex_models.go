@@ -48,6 +48,7 @@ func codexModelsAsked(ctx context.Context, sign func(context.Context, *http.Requ
 
 func codexModelsAt(ctx context.Context, sign func(context.Context, *http.Request, []byte) error, ver string) ([]catalog.Model, error) {
 	u := CodexBase + "/models?client_version=" + url.QueryEscape(ver)
+	ctx = withMagpieCall(ctx) // magpie's own request, as the setting has it (codex_own.go)
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u, nil)
 	if err != nil {
 		return nil, err
