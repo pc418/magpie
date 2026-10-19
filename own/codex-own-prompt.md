@@ -38,7 +38,9 @@ these rules, in order:
    the whole run stays in `input`, and `instructions` is `""`. Nothing falls
    back to Codex's prompt and nothing is dropped.
 4. **No instruction content at all** (for example `input: "hi"`):
-   `instructions` is `You are a helpful assistant.`
+   `instructions` is `You are a helpful assistant.` So is a leading run of
+   text that is empty or blank (`""`, `[]`, whitespace), whose items still
+   leave `input`.
 5. **The cache key** (`prompt_cache_key`) is computed as before, from the
    client's own instructions and input before anything is lifted; a key the
    client sent is kept.
@@ -64,12 +66,15 @@ is as before.
   removed).
 - **Codex's own:** the `originator`, `User-Agent` and `version` Codex sent
   go on as they came, not regenerated or raised to a newer version; one it
-  didn't send stays missing. Authorization, the account id and the session
+  didn't send stays missing (a missing User-Agent is sent empty, so Go's
+  transport doesn't put its own `Go-http-client/1.1` in its place). Authorization, the account id and the session
   headers are the account's, as before.
 - The gateway decides "sent by Codex" from the request's own headers when
   it arrives (`fromCodex`: a User-Agent or originator naming Codex). It is a
   heuristic, used only to pick the name; it authorizes nothing. Non-blank
   `instructions` don't make a caller Codex.
+- **The saved setting** is kept through a save from the Settings page that
+  doesn't name it (an older page, another setting).
 - **One read per request:** the setting is read once for a request, and that
   one answer decides both its body and its headers, retries included.
   Requests magpie makes outside the gateway (the account Test button) go as

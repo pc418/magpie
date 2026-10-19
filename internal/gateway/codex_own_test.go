@@ -4,11 +4,14 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"io"
+	"net/http"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"runtime"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -142,5 +145,80 @@ func TestCodexOwnTurnKeepsCodexsName(t *testing.T) {
 	}
 	if f.head.Get("originator") != "codex_cli_rs" || f.head.Get("User-Agent") != ua || f.head.Get("version") != "0.150.0" {
 		t.Fatalf("headers: %v", f.head)
+	}
+}
+
+// A Codex that names itself by its originator alone, with no User-Agent:
+// none reaches the backend, not even Go's own Go-http-client/1.1.
+func TestCodexOwnTurnWithoutUserAgentSendsNone(t *testing.T) {
+	f := &fake{t: t, ctype: "none", reply: piReply}
+	ownPromptChatGPT(t, f)
+	code, body := postOwn(t, "/v1/responses", fmt.Sprintf(piResponses, "codex/gpt-5.5"), "originator", "codex_exec")
+	if code != 200 || !strings.Contains(body, "a cat") {
+		t.Fatalf("reply: %d %s", code, body)
+	}
+	if f.head.Get("originator") != "codex_exec" || f.head.Values("User-Agent") != nil || f.head.Values("version") != nil {
+		t.Fatalf("headers: %v", f.head)
+	}
+}
+
+// One request reads the setting once: asked again (its structured output
+// refused, the gateway asks once more), it goes as it went first, though
+// the setting was turned off between the two.
+func TestCodexOwnPromptHeldAcrossAnAskAgain(t *testing.T) {
+	var mu sync.Mutex
+	var heads []http.Header
+	var bodies []map[string]any
+	up := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		b, _ := io.ReadAll(r.Body)
+		var m map[string]any
+		json.Unmarshal(b, &m)
+		mu.Lock()
+		heads, bodies = append(heads, r.Header.Clone()), append(bodies, m)
+		first := len(heads) == 1
+		mu.Unlock()
+		if first {
+			// turned off while the request is on its way
+			if err := settings.Save(settings.Settings{}); err != nil {
+				t.Error(err)
+			}
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(400)
+			io.WriteString(w, `{"error":{"message":"text.format type 'json_schema' is not supported, only 'text' and 'json_object' are allowed","type":"invalid_request_error"}}`)
+			return
+		}
+		w.Header().Set("Content-Type", "text/event-stream")
+		io.WriteString(w, piReply)
+	})
+	ownPromptChatGPT(t, &fake{t: t})
+	srv := httptest.NewServer(up)
+	t.Cleanup(srv.Close)
+	provider.CodexBase = srv.URL + "/backend-api/codex"
+
+	turn := strings.Replace(fmt.Sprintf(piResponses, "codex/gpt-5.5"), `"max_output_tokens":32000`,
+		`"max_output_tokens":32000,"text":{"format":{"type":"json_schema","name":"answer","schema":{"type":"object","properties":{"a":{"type":"string"}}}}}`, 1)
+	code, body := postOwn(t, "/v1/responses", turn, "User-Agent", "pi/0.75.0")
+	if code != 200 || !strings.Contains(body, "a cat") {
+		t.Fatalf("reply: %d %s", code, body)
+	}
+	mu.Lock()
+	defer mu.Unlock()
+	if len(heads) != 2 {
+		t.Fatalf("%d requests", len(heads))
+	}
+	// the second carries the schema in its instructions (formatInBody),
+	// which rule 1 keeps as they are, Pi's prompt where Pi put it; off,
+	// it would have gone with Codex's prompt and name
+	for i := range heads {
+		b, _ := json.Marshal(bodies[i])
+		if heads[i].Get("originator") != "magpie" || strings.Contains(string(b), "You are Codex") || !strings.Contains(string(b), "You are Pi.") {
+			t.Fatalf("request %d: %v %s", i+1, heads[i], b)
+		}
+	}
+	if bodies[0]["instructions"] != "You are Pi." || !strings.HasPrefix(bodies[1]["instructions"].(string), "Respond with a single JSON value") {
+		t.Fatalf("instructions: %q, %q", bodies[0]["instructions"], bodies[1]["instructions"])
+	}
+	if settings.Load().CodexOwnPrompt {
+		t.Fatal("the setting wasn't turned off")
 	}
 }

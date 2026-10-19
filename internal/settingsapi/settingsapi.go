@@ -45,7 +45,7 @@ var Keys = []string{
 	"codexWarmup", "claudeWarmup", "codexWarmAt", "claudeWarmAt", "codexWarmAts", "claudeWarmAts",
 	"workbuddyCheckin", "traeCheckin", "minimaxCheckin", "qoderCheckin",
 	// models: replies, vision, images, search
-	"memberModel", "noLoopGuard", "claudeLeanPrompt", "claudePrintMode", "refusalRetries",
+	"memberModel", "noLoopGuard", "claudeLeanPrompt", "claudePrintMode", "codexOwnPrompt", "refusalRetries",
 	"vision", "visionEffort", "imageGen", "imageTimeout", "classifyTimeout",
 	"searcher", "searcherThen", "searcherEffort", "searchFirst",
 	// updates
@@ -201,6 +201,11 @@ func Merge(body []byte, cur settings.Settings, web bool) (settings.Settings, err
 	// nor how long an image is given to be drawn
 	if _, sent := fields["imageTimeout"]; !sent {
 		in.ImageTimeout = cur.ImageTimeout
+	}
+	// nor whether a ChatGPT subscription answers with the agent's own
+	// prompt (own/codex-own-prompt.md)
+	if _, sent := fields["codexOwnPrompt"]; !sent {
+		in.CodexOwnPrompt = cur.CodexOwnPrompt
 	}
 	// nor how long a routing group's classifier is given (#2934)
 	if _, sent := fields["classifyTimeout"]; !sent {
