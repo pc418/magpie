@@ -262,6 +262,12 @@ type Settings struct {
 	// 100 MiB of its own, and a 512 MiB service was OOM-killed (#2956).
 	// It is this machine's, not taken from another's settings.
 	ClaudeRunsMost int `json:"claudeRunsMost,omitempty"`
+	// CodexOwnPrompt sends a ChatGPT subscription's requests with the
+	// agent's own instructions in place of Codex's, under magpie's name
+	// rather than Codex CLI's; a request Codex itself sent keeps Codex's
+	// prompt and name. Off, as by default, every request is made as Codex
+	// CLI makes it (own/codex-own-prompt.md).
+	CodexOwnPrompt bool `json:"codexOwnPrompt,omitempty"`
 	// RefusalRetries is how many more times a request the vendor's safety
 	// filter refused, with nothing said, is asked of another account or
 	// routing group member (#248), unset for every one left. 0 hands the

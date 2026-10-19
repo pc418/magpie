@@ -1477,7 +1477,7 @@ func (s *Server) drawChat(ctx context.Context, p provider.Provider, model string
 	body, _ := json.Marshal(req)
 	url := strings.TrimRight(p.Base(provider.Chat), "/") + "/chat/completions"
 	return s.eachDrawing(d.N, func() (drawn, int, error) {
-		b, code, err := s.send(ctx, p, url, "application/json", p.Prepare(body), true)
+		b, code, err := s.send(ctx, p, url, "application/json", p.PrepareFor(ctx, body), true)
 		if err != nil {
 			return drawn{}, code, err
 		}
