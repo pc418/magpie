@@ -236,6 +236,12 @@ type Settings struct {
 	// real Claude Code, its billing line and identity line kept; off, as by
 	// default, the run is the shape every Claude Code run has.
 	ClaudeLeanPrompt bool `json:"claudeLeanPrompt,omitempty"`
+	// CodexOwnPrompt sends a ChatGPT subscription's requests with the
+	// agent's own instructions in place of Codex's, under magpie's name
+	// rather than Codex CLI's; a request Codex itself sent keeps Codex's
+	// prompt and name. Off, as by default, every request is made as Codex
+	// CLI makes it (own/codex-own-prompt.md).
+	CodexOwnPrompt bool `json:"codexOwnPrompt,omitempty"`
 	// RefusalRetries is how many more times a request the vendor's safety
 	// filter refused, with nothing said, is asked of another account or
 	// routing group member (#248), unset for every one left. 0 hands the
