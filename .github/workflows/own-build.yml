@@ -1,0 +1,273 @@
+name: Own build
+
+# Builds magpie for macOS (Apple Silicon) from the `own` branch and publishes
+# it as a prerelease on the repository this runs in, tagged own-<VERSION>.
+# own/install.sh installs it.
+#
+# VERSION is `git describe` against upstream's v* tags, such as
+# v0.1.1285-3-gabc1234. update.Released says such a version is not a release,
+# so the build never updates itself to upstream's. A build whose describe is
+# a plain tag would look like a release, and the job fails on it.
+#
+# own-* tags never match a `v*` trigger, and describe matches v* only, so
+# they never become a version.
+#
+# Signing is optional, as in upstream's release workflow: without
+# MAC_CERTIFICATE_P12 the app is ad-hoc signed and not notarised. With it
+# the app (and the CLI) are signed with the Developer ID under the hardened
+# runtime, notarised, and the ticket stapled to the app inside the zip.
+# Notarisation takes an App Store Connect API key (APPLE_API_KEY_P8,
+# APPLE_API_KEY_ID, APPLE_API_ISSUER) or, failing that, an Apple ID
+# (APPLE_ID, APPLE_APP_SPECIFIC_PASSWORD, APPLE_TEAM_ID).
+
+on:
+  push:
+    branches: [own]
+  workflow_dispatch:
+
+# A newer push replaces a run still queued; a run already building finishes,
+# so a release is never left half uploaded.
+concurrency:
+  group: own-build-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+env:
+  UPSTREAM: https://github.com/yetone/magpie
+  APP_ZIP: magpie-own-darwin-arm64.zip
+  CLI_BIN: magpie-own-cli-darwin-arm64
+
+jobs:
+  mac:
+    runs-on: macos-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
+        with:
+          fetch-depth: 0
+
+      - name: Fetch upstream's version tags and main
+        run: |
+          git fetch --no-tags "$UPSTREAM" \
+            '+refs/tags/v*:refs/tags/v*' \
+            '+refs/heads/main:refs/remotes/upstream/main'
+
+      - name: Setup Go
+        uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6.5.0
+        with:
+          go-version-file: go.mod
+
+      - name: Version
+        run: |
+          VERSION=$(git describe --tags --match 'v*' --always HEAD)
+          echo "VERSION=$VERSION" >> "$GITHUB_ENV"
+          echo "SHA=$(git rev-parse HEAD)" >> "$GITHUB_ENV"
+          echo "Version: $VERSION"
+
+      # Asks magpie's own update.Released, so the check can't drift from it.
+      # The checker is built first: a build failure must not read as a verdict.
+      - name: Check the version is not release-shaped
+        run: |
+          mkdir -p .own-released
+          cat > .own-released/main.go <<'EOF'
+          package main
+
+          import (
+          	"fmt"
+          	"os"
+
+          	"github.com/yetone/magpie/internal/update"
+          )
+
+          func main() {
+          	if update.Released(os.Args[1]) {
+          		fmt.Printf("%s looks like a release\n", os.Args[1])
+          		os.Exit(1)
+          	}
+          }
+          EOF
+          CGO_ENABLED=0 go build -o "$RUNNER_TEMP/released" ./.own-released
+          rm -rf .own-released
+          if ! "$RUNNER_TEMP/released" "$VERSION"; then
+            echo "::error::$VERSION would count as a release and update itself to upstream's. HEAD must be past an upstream tag, not on one."
+            exit 1
+          fi
+
+      - name: Probe macOS signing secrets
+        id: signing
+        env:
+          P12: ${{ secrets.MAC_CERTIFICATE_P12 }}
+        run: |
+          if [ -n "$P12" ]; then
+            echo "enabled=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "enabled=false" >> "$GITHUB_OUTPUT"
+            echo "::warning::MAC_CERTIFICATE_P12 not set — the build will be ad-hoc signed and not notarised."
+          fi
+
+      - name: Import macOS certificates
+        if: steps.signing.outputs.enabled == 'true'
+        env:
+          CERTIFICATE_P12: ${{ secrets.MAC_CERTIFICATE_P12 }}
+          CERTIFICATE_PASSWORD: ${{ secrets.MAC_CERTIFICATE_PASSWORD }}
+        run: |
+          KEYCHAIN_PATH=$RUNNER_TEMP/app-signing.keychain-db
+          KEYCHAIN_PASSWORD=$(openssl rand -base64 32)
+
+          security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          security set-keychain-settings -lut 21600 "$KEYCHAIN_PATH"
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+
+          echo "$CERTIFICATE_P12" | base64 --decode > "$RUNNER_TEMP/certificate.p12"
+          security import "$RUNNER_TEMP/certificate.p12" -P "$CERTIFICATE_PASSWORD" -A -t cert -f pkcs12 -k "$KEYCHAIN_PATH"
+          security set-key-partition-list -S apple-tool:,apple: -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          security list-keychain -d user -s "$KEYCHAIN_PATH" login.keychain-db
+          rm -f "$RUNNER_TEMP/certificate.p12"
+
+          IDENTITY=$(security find-identity -v -p codesigning "$KEYCHAIN_PATH" | awk -F'"' '/Developer ID Application/ {print $2; exit}')
+          if [ -z "$IDENTITY" ]; then
+            echo "::error::No 'Developer ID Application' identity in MAC_CERTIFICATE_P12"
+            security find-identity -v -p codesigning "$KEYCHAIN_PATH"
+            exit 1
+          fi
+          echo "Signing as: $IDENTITY"
+          echo "IDENTITY=$IDENTITY" >> "$GITHUB_ENV"
+
+      # make app and make cli both write ./magpie: the app copies it first.
+      - name: Build magpie.app and the CLI
+        run: |
+          make app VERSION="$VERSION"
+          make cli VERSION="$VERSION"
+          mv magpie "$CLI_BIN"
+
+      - name: Sign
+        run: |
+          if [ -n "${IDENTITY:-}" ]; then
+            codesign --force --options runtime --timestamp --sign "$IDENTITY" magpie.app
+            codesign --force --options runtime --timestamp --sign "$IDENTITY" "$CLI_BIN"
+          else
+            codesign --force --sign - magpie.app
+          fi
+          codesign --verify --strict --verbose=2 magpie.app
+          codesign --verify --strict --verbose=2 "$CLI_BIN"
+          codesign -dv --verbose=2 magpie.app 2>&1 | grep -E 'Authority|TeamIdentifier|flags|Identifier'
+
+      - name: Notarise and staple
+        if: steps.signing.outputs.enabled == 'true'
+        env:
+          APPLE_API_KEY_P8: ${{ secrets.APPLE_API_KEY_P8 }}
+          APPLE_API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
+          APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          if [ -n "$APPLE_API_KEY_P8" ]; then
+            echo "$APPLE_API_KEY_P8" > "$RUNNER_TEMP/AuthKey.p8"
+            AUTH=(--key "$RUNNER_TEMP/AuthKey.p8" --key-id "$APPLE_API_KEY_ID" --issuer "$APPLE_API_ISSUER")
+          else
+            AUTH=(--apple-id "$APPLE_ID" --password "$APPLE_APP_SPECIFIC_PASSWORD" --team-id "$APPLE_TEAM_ID")
+          fi
+          # One submission holds the app and the CLI; the ticket is stapled
+          # to the app (a bare binary can't hold one, Gatekeeper looks it up).
+          mkdir -p "$RUNNER_TEMP/notary"
+          cp -R magpie.app "$CLI_BIN" "$RUNNER_TEMP/notary/"
+          ditto -c -k "$RUNNER_TEMP/notary" "$RUNNER_TEMP/notary.zip"
+          OUT=$(xcrun notarytool submit "$RUNNER_TEMP/notary.zip" "${AUTH[@]}" --wait --timeout 30m --output-format json)
+          echo "$OUT"
+          ID=$(echo "$OUT" | jq -r .id)
+          STATUS=$(echo "$OUT" | jq -r .status)
+          if [ "$STATUS" != "Accepted" ]; then
+            xcrun notarytool log "$ID" "${AUTH[@]}" || true
+            rm -f "$RUNNER_TEMP/AuthKey.p8"
+            echo "::error::Notarisation $STATUS"
+            exit 1
+          fi
+          rm -f "$RUNNER_TEMP/AuthKey.p8"
+          # stapler fetches the ticket from Apple's CloudKit, which drops the
+          # connection now and then (error 68): try again before failing
+          staple() {
+            for i in 1 2 3 4 5; do
+              xcrun stapler staple "$1" && return 0
+              echo "staple $1 failed (try $i), retrying in $((i * 20))s"
+              sleep $((i * 20))
+            done
+            return 1
+          }
+          staple magpie.app
+          spctl --assess --type execute --verbose=2 magpie.app
+          echo "NOTARISED=true" >> "$GITHUB_ENV"
+
+      - name: Remove signing keychain
+        if: always() && steps.signing.outputs.enabled == 'true'
+        run: security delete-keychain "$RUNNER_TEMP/app-signing.keychain-db" || true
+
+      # Under a HOME of its own: --version must not set up a real one.
+      - name: Check both binaries print the version
+        run: |
+          for bin in magpie.app/Contents/MacOS/magpie "./$CLI_BIN"; do
+            GOT=$(HOME=$(mktemp -d) "$bin" --version)
+            echo "$bin: $GOT"
+            if [ "$GOT" != "magpie $VERSION" ]; then
+              echo "::error::$bin --version printed '$GOT', want 'magpie $VERSION'"
+              exit 1
+            fi
+          done
+
+      - name: Zip magpie.app
+        run: ditto -c -k --keepParent magpie.app "$APP_ZIP"
+
+      - name: Summary
+        run: |
+          if [ "${NOTARISED:-}" = true ]; then
+            SIGNED="Signed with the Developer ID and notarised by Apple."
+          else
+            SIGNED="Ad-hoc signed, not notarised: macOS asks before the first launch of a downloaded copy. own/install.sh removes the quarantine flag."
+          fi
+          echo "SIGNED=$SIGNED" >> "$GITHUB_ENV"
+          {
+            echo "### magpie own $VERSION"
+            echo
+            echo "- Built at \`$SHA\`"
+            echo "- $SIGNED"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Publish the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          TAG="own-$VERSION"
+          TITLE="magpie own $VERSION"
+          {
+            echo "Built from \`$GITHUB_REF_NAME\` at $SHA."
+            echo
+            echo "$SIGNED"
+            echo
+            echo "Commits past upstream main:"
+            echo
+            echo '```'
+            git log --oneline upstream/main..HEAD
+            echo '```'
+          } > "$RUNNER_TEMP/notes.md"
+
+          # Only "release not found" means there is none; any other failure
+          # to look is an error, not a reason to create one.
+          if VIEW=$(gh release view "$TAG" -R "$GITHUB_REPOSITORY" --json tagName 2>&1); then
+            gh release upload "$TAG" "$APP_ZIP" "$CLI_BIN" -R "$GITHUB_REPOSITORY" --clobber
+            gh release edit "$TAG" -R "$GITHUB_REPOSITORY" --title "$TITLE" --notes-file "$RUNNER_TEMP/notes.md" --prerelease
+            ACTION=replaced
+          elif [ "$VIEW" = "release not found" ]; then
+            gh release create "$TAG" "$APP_ZIP" "$CLI_BIN" -R "$GITHUB_REPOSITORY" \
+              --target "$SHA" --title "$TITLE" --notes-file "$RUNNER_TEMP/notes.md" --prerelease
+            ACTION=created
+          else
+            echo "::error::gh release view $TAG: $VIEW"
+            exit 1
+          fi
+
+          echo "- Release \`$TAG\` $ACTION" >> "$GITHUB_STEP_SUMMARY"
