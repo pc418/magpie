@@ -1,0 +1,154 @@
+name: Own sync
+
+# Keeps the `own` branch on upstream's newest release (own/sync.sh):
+#
+# - upstream (yetone/magpie) has a release own doesn't have: our commits are
+#   rebased onto it, checked, and pushed to own with OWN_SYNC_TOKEN. That
+#   push starts own-build.yml. A conflict fails the run with nothing pushed.
+# - own has it already: own is left as it is (never rebased backward). When
+#   no own-* release was built from own's tip, and no build of it is under
+#   way, own-build.yml is run for own, so a failed build is tried again.
+#
+# OWN_SYNC_TOKEN is a repository secret: a fine-grained token on this
+# repository with Contents and Workflows write. GITHUB_TOKEN can't push a
+# commit that changes a workflow (upstream's commits do), and its pushes
+# start no workflow.
+#
+# A schedule runs on the default branch only, so `own` is the default branch.
+
+on:
+  schedule:
+    - cron: '17 6 * * *'
+  workflow_dispatch:
+
+# One sync at a time; a second waits for the first rather than cancel it
+# halfway through a push.
+concurrency:
+  group: own-sync
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+env:
+  UPSTREAM: https://github.com/yetone/magpie
+  UPSTREAM_REPO: yetone/magpie
+  BRANCH: own
+
+jobs:
+  sync:
+    runs-on: macos-latest
+    timeout-minutes: 150
+    permissions:
+      contents: read
+      actions: write # to run own-build.yml
+
+    steps:
+      # No persisted credentials: the push must carry OWN_SYNC_TOKEN, not
+      # GITHUB_TOKEN (sync.sh refuses to push when one is persisted).
+      - name: Checkout own
+        uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
+        with:
+          ref: own
+          fetch-depth: 0
+          persist-credentials: false
+
+      # The rebase replaces the checkout's copy with the rebased one.
+      - name: Keep the sync script out of the tree
+        run: cp own/sync.sh "$RUNNER_TEMP/sync.sh"
+
+      - name: Decide, and rebase onto upstream's newest release
+        id: sync
+        env:
+          GH_TOKEN: ${{ github.token }}
+          OWN_SYNC_TOKEN: ${{ secrets.OWN_SYNC_TOKEN }}
+          FORK: https://github.com/${{ github.repository }}
+          FORK_REPO: ${{ github.repository }}
+          GIT_COMMITTER_NAME: pc418
+          GIT_COMMITTER_EMAIL: 271863285+pc418@users.noreply.github.com
+        run: bash "$RUNNER_TEMP/sync.sh" prepare
+
+      # The checks below run on the rebased tree, before anything is pushed:
+      # gofmt, vet for macOS, Linux and Windows, the full Go suite, and the
+      # GUI tests our own commits carry (own's rule: not the whole GUI suite).
+      - name: Setup Go
+        if: steps.sync.outputs.action == 'rebase'
+        uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6.5.0
+        with:
+          go-version-file: go.mod
+
+      - name: Gofmt
+        if: steps.sync.outputs.action == 'rebase'
+        run: |
+          bad=$(git ls-files -z '*.go' | xargs -0 gofmt -l)
+          if [ -n "$bad" ]; then echo "not gofmt'd:"; echo "$bad"; exit 1; fi
+
+      - name: Vet
+        if: steps.sync.outputs.action == 'rebase'
+        run: |
+          go vet ./...
+          GOOS=linux go vet -tags nogui ./...
+          GOOS=windows go vet ./...
+
+      - uses: oven-sh/setup-bun@v2
+        if: steps.sync.outputs.action == 'rebase'
+        with:
+          bun-version: 1.4.2
+
+      - name: Test
+        if: steps.sync.outputs.action == 'rebase'
+        run: go test -tags nogui -timeout 45m ./...
+
+      - uses: actions/setup-node@v4
+        if: steps.sync.outputs.action == 'rebase'
+        with:
+          node-version: 22
+
+      - name: Playwright
+        if: steps.sync.outputs.action == 'rebase'
+        run: |
+          mkdir -p "$RUNNER_TEMP/pw"
+          cd "$RUNNER_TEMP/pw"
+          npm init -y >/dev/null
+          npm install --no-audit --no-fund playwright@1.62.1
+          npx playwright install chromium webkit
+          echo "NODE_PATH=$RUNNER_TEMP/pw/node_modules" >> "$GITHUB_ENV"
+
+      - name: GUI tests
+        if: steps.sync.outputs.action == 'rebase'
+        run: |
+          node --test --test-concurrency=1 \
+            internal/gui/tests/codex-own-prompt-setting.test.cjs \
+            internal/gui/tests/i18n-keys.test.cjs
+
+      - name: Push own
+        if: steps.sync.outputs.action == 'rebase'
+        env:
+          OWN_SYNC_TOKEN: ${{ secrets.OWN_SYNC_TOKEN }}
+          FORK: https://github.com/${{ github.repository }}
+          FORK_REPO: ${{ github.repository }}
+        run: bash "$RUNNER_TEMP/sync.sh" push
+
+      - name: Run own-build.yml
+        if: steps.sync.outputs.action == 'build'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          FORK_REPO: ${{ github.repository }}
+        run: bash "$RUNNER_TEMP/sync.sh" dispatch
+
+      - name: Summary
+        if: always()
+        env:
+          ACTION: ${{ steps.sync.outputs.action }}
+          TAG: ${{ steps.sync.outputs.tag }}
+          TIP: ${{ steps.sync.outputs.tip }}
+          HEAD: ${{ steps.sync.outputs.head }}
+        run: |
+          {
+            echo "### own sync"
+            echo
+            echo "- Upstream's newest release: \`${TAG:-unknown}\`"
+            echo "- own was at \`${TIP:-unknown}\`"
+            echo "- Action: \`${ACTION:-none decided}\`"
+            if [ "$ACTION" = rebase ]; then echo "- Rebased to \`$HEAD\`"; fi
+          } >> "$GITHUB_STEP_SUMMARY"
