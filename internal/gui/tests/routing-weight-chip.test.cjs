@@ -4,7 +4,10 @@
 // back to Smart's for a trace whose keys route by weight. The chip now
 // reads By weight — the provider editor's own words, already spoken in
 // every language — and the story says whose share went first, while keys
-// under Smart still say Smart. In English, Chinese, Japanese and German.
+// under Smart still say Smart. Keys under Weekly pace have no week, so
+// the story says they go in their order, not by the tokens sent them
+// (2026-10-20: pace weighs no tokens). In English, Chinese, Japanese and
+// German.
 const assert = require("node:assert/strict");
 const fs = require("node:fs/promises");
 const path = require("node:path");
@@ -20,6 +23,7 @@ const key = (who, routing) => ({ id: "relay#" + who, provider: "relay", name: "R
 const scenes = {
   weight: { order: [key("relay-b", "weight"), key("relay-a", "weight")], why: "By weight: it's {who}'s share — each key takes requests as its weight says." },
   smart: { order: [key("relay-a", ""), key("relay-b", "")], why: "{who} goes first: keys go in their order, those that suit the request first." },
+  pace: { order: [key("relay-a", "pace"), key("relay-b", "pace")], why: "{who} goes first: keys go in their order, those that suit the request first." },
 };
 
 function serve(lang, scene) {
@@ -41,7 +45,7 @@ function serve(lang, scene) {
     if (url.pathname === "/api/gateway/history") return json({ cut: false, days: [], routes: [] });
     // the relay routes over its two keys, as /api/groups lists it
     if (url.pathname === "/api/groups") return json({ groups: [], pools: [{ provider: "relay", name: "Relay", icon: "generic", kind: "key",
-      who: ["relay-a", "relay-b"], routing: scene === "weight" ? "weight" : "", affinity: "" }] });
+      who: ["relay-a", "relay-b"], routing: scene === "smart" ? "" : scene, affinity: "" }] });
     if (url.pathname === "/api/providers") return json({ providers: [], presets: [], excluded: [], gateway: { running: true, window: true } });
     if (url.pathname.startsWith("/api/")) return json({});
     const file = path.join(assets, url.pathname === "/" ? "index.html" : url.pathname);
@@ -52,6 +56,7 @@ function serve(lang, scene) {
 
 const chip = { en: "By weight", zh: "按权重", ja: "重み付け", de: "Nach Gewicht" };
 const smart = { en: "Smart", zh: "智能", ja: "スマート", de: "Intelligent" };
+const pace = { en: "Weekly pace", zh: "重置前用完", ja: "週ペース", de: "Wochentempo" };
 
 for (const engine of (process.env.BROWSER ? [process.env.BROWSER] : ["chromium", "webkit"])) {
   for (const lang of ["en", "zh", "ja", "de"]) {
@@ -102,6 +107,29 @@ for (const engine of (process.env.BROWSER ? [process.env.BROWSER] : ["chromium",
       assert.equal((await page.locator(".rt-mode").textContent()).trim(),
         await page.evaluate(([lang, key]) => (lang !== "en" && I18N[lang]?.[key]) || key, [lang,
           "Smart: keys that suit the request go first — one made for the model's own API — then in their order. One resting after a failure goes last."]));
+      assert.deepEqual(errors, []);
+    });
+
+    test(`${engine} ${lang}: keys under Weekly pace go in their order`, async (t) => {
+      const browser = await (engine === "webkit" ? webkit.launch() : chromium.launch({ channel: "chromium" }));
+      t.after(() => browser.close());
+      const page = await browser.newPage({ viewport: { width: 1100, height: 900 }, reducedMotion: "reduce" });
+      page.setDefaultTimeout(5000);
+      const errors = [];
+      page.on("pageerror", (error) => errors.push(error.message));
+      await page.route("**/*", serve(lang, "pace"));
+      await page.goto("http://magpie.test/?view=routing");
+      const req = page.locator(".rt-req").first();
+      await req.waitFor();
+      if (await req.getAttribute("aria-pressed") !== "true") await req.click();
+      await page.locator(".rt-hub i").filter({ hasText: pace[lang] }).waitFor();
+      assert.equal((await page.locator(".rt-hub i").textContent()).trim(), pace[lang]);
+      const say = (key, vars = {}) => page.evaluate(([lang, key, vars]) => ((lang !== "en" && I18N[lang]?.[key]) || key).replace(/\{(\w+)\}/g, (_, k) => vars[k]), [lang, key, vars]);
+      assert.equal((await page.locator(".rt-mode").textContent()).trim(),
+        await say("Weekly pace: the account with the most of its week left per hour until it renews goes first — the one with the most to lose at its reset; an account with five hours and no week by what its five hours have left per hour. One all but used up waits until nothing else can answer; a key with no week goes in its order."));
+      await page.locator(".rt-steps li.why").first().waitFor();
+      assert.equal((await page.locator(".rt-steps li.why").first().textContent()).trim(),
+        await say(scenes.pace.why, { who: "relay-a" }));
       assert.deepEqual(errors, []);
     });
   }
