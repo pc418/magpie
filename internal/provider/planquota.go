@@ -414,15 +414,21 @@ func readKimiCode(b []byte) (string, []QuotaWindow, error) {
 	if err := json.Unmarshal(b, &r); err != nil {
 		return "", nil, err
 	}
+	// a number, finite: "NaN" and "Infinity" parse, and are no reading
 	num := func(v any) (float64, bool) {
+		var f float64
 		switch x := v.(type) {
 		case float64:
-			return x, true
+			f = x
 		case string:
-			f, err := strconv.ParseFloat(strings.TrimSpace(x), 64)
-			return f, err == nil
+			var err error
+			if f, err = strconv.ParseFloat(strings.TrimSpace(x), 64); err != nil {
+				return 0, false
+			}
+		default:
+			return 0, false
 		}
-		return 0, false
+		return f, !math.IsNaN(f) && !math.IsInf(f, 0)
 	}
 	window := func(d row, name string, span time.Duration) (QuotaWindow, bool) {
 		limit, ok := num(d["limit"])
