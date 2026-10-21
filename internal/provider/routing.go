@@ -9,6 +9,7 @@ package provider
 import (
 	"context"
 	"fmt"
+	"math"
 	"regexp"
 	"slices"
 	"sort"
@@ -499,7 +500,7 @@ func Allowances(agent string) map[string]Allowance {
 			all := map[string]Allowance{}
 			readings, readAt := loginUsageAt(ctx, agent)
 			for user, q := range readings {
-				if q.Error != "" || len(q.Windows) == 0 {
+				if q.Error != "" || !readWindows(q.Windows) {
 					continue
 				}
 				all[user] = allowanceOf(q.Windows, time.Now()).restartedBy(resetRunsOut(agent, user, q.Windows, q.Resets))
@@ -708,7 +709,22 @@ func (a Allowance) restartedBy(runsOut time.Time) Allowance {
 	return a
 }
 
-// allowanceOf keeps the windows that can stop an account.
+// unread: w's share used isn't a number (NaN, ±Inf, as a vendor's "NaN"
+// parses): a failed read of that window, so routing leaves it out rather
+// than sort by it — NaN compares as equal to every share.
+func unread(w QuotaWindow) bool {
+	return math.IsNaN(w.Used) || math.IsInf(w.Used, 0)
+}
+
+// readWindows: ws holds a window routing can go by — one left out as
+// unread doesn't count, so an account whose every window is unread is
+// not known, rather than known with nothing used.
+func readWindows(ws []QuotaWindow) bool {
+	return slices.ContainsFunc(ws, func(w QuotaWindow) bool { return !unread(w) })
+}
+
+// allowanceOf keeps the windows that can stop an account; an unread one
+// is left out.
 func allowanceOf(ws []QuotaWindow, now time.Time) Allowance {
 	// Antigravity keeps the vendor's ids in its windows (and on disk),
 	// while requests can name the collapsed model. Use the same families
@@ -733,7 +749,7 @@ func allowanceOf(ws []QuotaWindow, now time.Time) Allowance {
 	}
 	var a Allowance
 	for _, w := range ws {
-		if w.Aside {
+		if w.Aside || unread(w) {
 			continue
 		}
 		l := Limit{Used: w.Used, Span: w.Span, Model: w.Model, Amount: w.Amount, Of: w.Limit, Unit: w.Unit, matches: w.matches, partial: w.partial, Name: w.Name}
