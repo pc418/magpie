@@ -15,8 +15,9 @@ import (
 // #718, thedavidweng: A with 80% left renewing in five days and a reset
 // running out that afternoon went behind B with 50% left renewing in two).
 // Holding a reset that runs out after the week renews, or none, changes
-// nothing; the 90% and 98% tiers are kept; the trace says when the reset
-// set it.
+// nothing; Smart's 90% and 98% tiers are kept, and pace's spent last
+// (pace has no 90% tier, docs/261020-eval-WEEKLY_PACE_SIMPLIFY-routes_pace.md);
+// the trace says when the reset set it.
 func TestResetSpentIsTheDeadline(t *testing.T) {
 	old := allowances
 	defer func() { allowances = old }()
@@ -83,12 +84,13 @@ func TestResetSpentIsTheDeadline(t *testing.T) {
 		if w := weighed(cs[1], p, wg, false, provider.Chat); w.DueBy != "" || w.Restarts != nil {
 			t.Fatalf("%s trace, week sooner: by %q, restarts %v", name, w.DueBy, w.Restarts)
 		}
-		// A sooner than the week renews, but at 90% of its five hours:
-		// it waits behind B all the same
+		// A sooner than the week renews, but at 92% of its five hours:
+		// Smart has it wait behind B; pace goes by its pace all the same
 		share["a@x.com"] = week(20, 120*time.Hour, 90*time.Minute)
 		share["a@x.com"][0].Used = 92
-		if got, _, _ := order(); got != "ba" {
-			t.Fatalf("%s, low tier kept: %s", name, got)
+		want := map[string]string{provider.Pace: "ab", "": "ba"}[routing]
+		if got, _, _ := order(); got != want {
+			t.Fatalf("%s, at 92%% of its five hours: %s, want %s", name, got, want)
 		}
 		// all but used up: last, whatever its reset
 		share["a@x.com"] = week(99, 120*time.Hour, 90*time.Minute)

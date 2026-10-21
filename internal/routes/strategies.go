@@ -129,63 +129,20 @@ var LeastUsed = Strategy{ByUse: true, Order: func(_ string, seats []Seat) []int 
 }}
 
 // Pace puts a subscription by what it has left of its week per hour until
-// that renews, the most first: it has the most to lose at the reset, where
-// the most left alone (least used) sends a fresh account ahead of one with
-// 80% left and an hour to go, and the soonest reset alone (smart) sends one
-// with 3% left and an hour to go ahead of one with 90% and two. The tiers
-// are Smart's: one at 90% or more of any window that counts the model — the
-// five hours too, a rate cap it would be sent into before its allowance was
-// read again — waits until the others can't answer, one all but used up
-// until nothing else can; each tier by the share used. Among the rest, one
-// not known that tells what it has left as it answers goes first while it
-// isn't, as in Smart, else it would never be known; then the pace, those
-// alike within a tenth by what magpie sent them lately, then in their
-// order, keeping the vendor's prompt cache warm. An account not known
-// counts as a whole week ahead of it; a key has no week, unless it reads
-// its own windows (a sub2api key's limits). A Codex account that spends a
-// reset about to run out by itself goes by the hours until then when that
-// is sooner (Allowance.Pace, #717).
-var Pace = Strategy{ByUse: true, Order: func(_ string, seats []Seat) []int {
-	// the bands of pace alike within a tenth, the highest first: drawn
-	// before sorting, from each band's highest down, so that sorting by
-	// them is consistent — "within a tenth of each other" alone is not,
-	// three paces a twelfth apart each going round in a circle. Drawn among
-	// those the pace orders alone — one running low would otherwise set a
-	// band's top and part two alike behind it
-	var byPace []int
-	for i, s := range seats {
-		if tier(s.Used) == 0 && !s.Learns {
-			byPace = append(byPace, i)
-		}
-	}
-	sort.SliceStable(byPace, func(a, b int) bool { return seats[byPace[a]].Pace > seats[byPace[b]].Pace })
-	band, top := make([]int, len(seats)), 0.0
-	for k, i := range byPace {
-		if p := seats[i].Pace; k == 0 || p < 0.9*top {
-			top = p
-			if k > 0 {
-				band[i] = band[byPace[k-1]] + 1
-				continue
-			}
-		} else {
-			band[i] = band[byPace[k-1]]
-		}
-	}
+// that renews (Allowance.Pace), the most first: the account with the most
+// of its week per remaining hour has the most to lose at its reset. One
+// all but used up goes last, since it can answer only when nothing else
+// can. Equal paces keep their listed order: every account not known counts
+// as a whole week ahead of it (provider.FreshPace), and a key with no week
+// of its own has none.
+var Pace = Strategy{Order: func(_ string, seats []Seat) []int {
 	idx := identity(len(seats))
 	sort.SliceStable(idx, func(a, b int) bool {
 		sa, sb := seats[idx[a]], seats[idx[b]]
-		if ta, tb := tier(sa.Used), tier(sb.Used); ta != tb {
-			return ta < tb
-		} else if ta > 0 {
-			if sa.Used != sb.Used {
-				return sa.Used < sb.Used
-			}
-		} else if sa.Learns != sb.Learns {
-			return sa.Learns
-		} else if band[idx[a]] != band[idx[b]] {
-			return band[idx[a]] < band[idx[b]]
+		if spentA, spentB := sa.Used >= UsedShare, sb.Used >= UsedShare; spentA != spentB {
+			return spentB
 		}
-		return sa.Tokens < sb.Tokens
+		return sa.Pace > sb.Pace
 	})
 	return idx
 }}
