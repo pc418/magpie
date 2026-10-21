@@ -10,6 +10,7 @@ import (
 	"context"
 	"fmt"
 	"maps"
+	"math"
 	"slices"
 	"sort"
 	"strings"
@@ -1199,7 +1200,15 @@ func routedAllowance(agent, user string, q SubscriptionQuota, now time.Time) (Al
 	return a.restartedBy(resetRunsOut(agent, user, q.Windows, q.Resets)), true
 }
 
-// allowanceOf keeps the windows that can stop an account.
+// unread: w's share used isn't a number (NaN, ±Inf, as a vendor's "NaN"
+// parses): a failed read of that window, so routing leaves it out rather
+// than sort by it — NaN compares as equal to every share.
+func unread(w QuotaWindow) bool {
+	return math.IsNaN(w.Used) || math.IsInf(w.Used, 0)
+}
+
+// allowanceOf keeps the windows that can stop an account; an unread one
+// is left out.
 func allowanceOf(ws []QuotaWindow, now time.Time) Allowance {
 	// Antigravity keeps the vendor's ids in its windows (and on disk),
 	// while requests can name the collapsed model. Use the same families
@@ -1234,7 +1243,7 @@ func allowanceOf(ws []QuotaWindow, now time.Time) Allowance {
 	var a Allowance
 	at := map[string]int{} // a model's own window, by its model
 	for _, w := range ws {
-		if w.Aside || w.Text {
+		if w.Aside || w.Text || unread(w) {
 			continue
 		}
 		l := Limit{Used: w.Used, Span: w.Span, Model: w.Model, Amount: w.Amount, Of: w.Limit, Unit: w.Unit, matches: w.matches, partial: w.partial, Name: w.Name, Credits: w.Credits, Resets: resets(w)}
