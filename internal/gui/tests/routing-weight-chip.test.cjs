@@ -4,9 +4,9 @@
 // back to Smart's for a trace whose keys route by weight. The chip now
 // reads By weight — the provider editor's own words, already spoken in
 // every language — and the story says whose share went first, while keys
-// under Smart still say Smart. Keys under Weekly pace have no week, so
-// the story says they go in their order, not by the tokens sent them
-// (2026-10-20: pace weighs no tokens). In English, Chinese, Japanese and
+// under Smart still say Smart. Keys under Weekly pace whose windows
+// aren't known have no pace, so the story says they go in their order,
+// not by the tokens sent them (2026-10-20: pace weighs no tokens). In English, Chinese, Japanese and
 // German.
 const assert = require("node:assert/strict");
 const fs = require("node:fs/promises");
@@ -126,7 +126,7 @@ for (const engine of (process.env.BROWSER ? [process.env.BROWSER] : ["chromium",
       assert.equal((await page.locator(".rt-hub i").textContent()).trim(), pace[lang]);
       const say = (key, vars = {}) => page.evaluate(([lang, key, vars]) => ((lang !== "en" && I18N[lang]?.[key]) || key).replace(/\{(\w+)\}/g, (_, k) => vars[k]), [lang, key, vars]);
       assert.equal((await page.locator(".rt-mode").textContent()).trim(),
-        await say("Weekly pace: the account with the most of its week left per hour until it renews goes first — the one with the most to lose at its reset; an account with five hours and no week by what its five hours have left per hour. One all but used up waits until nothing else can answer; a key with no week goes in its order."));
+        await say("Weekly pace: the account with the most of its week left per hour until it renews goes first — the one with the most to lose at its reset; an account with five hours and no week by what its five hours have left per hour. One all but used up waits until nothing else can answer; a key by the usage windows it reads, else in its order."));
       await page.locator(".rt-steps li.why").first().waitFor();
       assert.equal((await page.locator(".rt-steps li.why").first().textContent()).trim(),
         await say(scenes.pace.why, { who: "relay-a" }));
