@@ -635,7 +635,7 @@ function routingPage(part) {
     drain: ["Until used up", "Until used up: one answers everything until its quota is used up; then the next, which keeps them even after the one before renews."],
     rotate: ["In turn", "In turn: each conversation's next turn goes to the account after the one that answered its last, and a new conversation starts one further along; the requests within a turn stay put, keeping the prompt cache."],
     usage: ["Least used", "Least used first: the account with the most of its allowance left goes first; a key by the tokens magpie sent it lately."],
-    pace: ["Use before expiry", "Use before expiry: the account with the most left per hour until it is lost goes first — at its reset, or, when credits in it expire sooner, by those that expire first; an account with five hours and no week by what its five hours have left per hour. One all but used up waits until nothing else can answer; a key with no week goes in its order."],
+    pace: ["Use before expiry", "Use before expiry: the account with the most left per hour until it is lost goes first — at its reset, or, when credits in it expire sooner, by those that expire first; an account with five hours and no week by what its five hours have left per hour. One all but used up waits until nothing else can answer; a key by the usage windows it reads, else in its order."],
     manual: ["Manual", "Manual: every request goes to the model picked on the group's card, over its own accounts or keys."],
     // a provider's keys or a subscription's accounts by weight (#841,
     // rubbzha on X); both strings as the provider editor's routing options
@@ -944,7 +944,7 @@ function routingPage(part) {
             ? t("Use before expiry: {who} has the most remaining allowance per hour until reset — {n} left, resets in {d}.", { who: w, n: pct(left), d: dur(at(f.due) - at(r.time)) })
             : t("Use before expiry: {who} has the most remaining allowance per hour until reset — {n} used.", { who: w, n: pct(f.used) });
         }
-        // keys with no week have no pace: they go in their order, told below
+        // keys whose windows aren't known have no pace: they go in their order, told below
         if (f.kind === "key" && !someKnown) break;
         return t("Use before expiry: {who} goes first.", { who: w });
     }
@@ -5996,7 +5996,7 @@ function routingPage(part) {
     drain: "Until used up: one account or key, across the members, takes every request until it is used up; then the next in the list, which keeps them even after an earlier one renews. One rate limited or failing is passed over only while it rests.",
     rotate: "In turn: each conversation's next turn goes to the next member's account or key, spreading the load.",
     usage: "Least used first: the account or key with the most of its allowance left goes first.",
-    pace: "Use before expiry: the account with the most left per hour until it is lost goes first — its week at its reset, or credits in it that expire sooner — so less of each member's allowance is lost; an account with five hours and no week (Claude Enterprise) by what its five hours have left per hour until they renew, so almost always first; one all but used up last; a key with no week in its order.",
+    pace: "Use before expiry: the account with the most left per hour until it is lost goes first — its week at its reset, or credits in it that expire sooner — so less of each member's allowance is lost; an account with five hours and no week (Claude Enterprise) by what its five hours have left per hour until they renew, so almost always first; one all but used up last; a key by the usage windows it reads, else in its order.",
     weight: GROUP_WEIGHT,
     free: "Free first: the members whose model its vendor serves at no cost to the subscription's allowance or credits go first, then the rest — each whole, over its own accounts or keys as its provider routes them. The free ones are tried before any that spends, so nothing that costs nothing is left unused.",
     fast: "Speed first: the member that answered fastest lately goes first, by its time to the first token and how fast it writes, each of its accounts or keys weighed on its own; those within a tenth keep their listed order, and one not measured lately gets one request in five, so it is measured again.",

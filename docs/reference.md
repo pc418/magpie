@@ -2287,7 +2287,7 @@ depends on the routing:
 | In turn | Where the rotation goes next. |
 | Smart | Only between accounts whose windows all renew in the same hours, or whose shares used are equal. |
 | Least used first | Only between accounts with the same share used and the same tokens sent lately. |
-| Use before expiry | Only between accounts with the same pace: in practice those not known yet (each a fresh week) and keys with no week. |
+| Use before expiry | Only between accounts with the same pace: in practice those not known yet (each a fresh week) and keys whose windows aren't read. |
 | Speed first | Only between those within a tenth of each other's speed, and among those not measured lately. |
 | Cheapest first | Only between those that cost the same now, and among those with no known price. |
 
