@@ -122,12 +122,35 @@ func TestLeastUsedAndOrdered(t *testing.T) {
 	}
 }
 
-// Weekly pace: the most of a week left per hour first; one running low
-// after, whatever its pace.
+// Weekly pace: the most of a week left per hour first, one running low
+// by its pace like the rest; one all but used up last, whatever its pace;
+// equal paces, and the tokens sent lately, leave the listed order.
+//
+// PIN (2026-10-20, owner): pace is the one rule, spent last; the review's
+// 90% tier, learns-first, 10% bands and tokens tie-break are gone
+// (docs/261020-eval-WEEKLY_PACE_SIMPLIFY-routes_pace.md §6).
 func TestPace(t *testing.T) {
-	s := []Seat{{Key: "slow", Pace: 1}, {Key: "low", Used: 95, Pace: 50}, {Key: "fast", Pace: 10}}
-	if got := keys(s, Apply(Pace, "p", s)); !slices.Equal(got, []string{"fast", "slow", "low"}) {
+	s := []Seat{{Key: "slow", Pace: 1}, {Key: "low", Used: 95, Pace: 50}, {Key: "fast", Pace: 10}, {Key: "spent", Used: 98, Pace: 90}}
+	if got := keys(s, Apply(Pace, "p", s)); !slices.Equal(got, []string{"low", "fast", "slow", "spent"}) {
 		t.Fatalf("pace: %v", got)
+	}
+	// just under spent counts by its pace; two spent go by theirs
+	s = []Seat{{Key: "a", Pace: 1}, {Key: "under", Used: 97.9, Pace: 2}, {Key: "s1", Used: 100, Pace: 1}, {Key: "s2", Used: 98, Pace: 3}}
+	if got := keys(s, Apply(Pace, "p", s)); !slices.Equal(got, []string{"under", "a", "s2", "s1"}) {
+		t.Fatalf("spent boundary: %v", got)
+	}
+	// exact ties keep their order, whatever was sent to them lately
+	s = []Seat{{Key: "x", Pace: 0.5, Tokens: 900}, {Key: "y", Pace: 0.5, Tokens: 1}, {Key: "z", Pace: 0.5, Tokens: 50}}
+	if got := keys(s, Apply(Pace, "p", s)); !slices.Equal(got, []string{"x", "y", "z"}) {
+		t.Fatalf("ties: %v", got)
+	}
+	// a pace a twentieth below the top is behind it, not alike
+	s = []Seat{{Key: "near", Pace: 0.95, Tokens: 0}, {Key: "top", Pace: 1, Tokens: 900}}
+	if got := keys(s, Apply(Pace, "p", s)); !slices.Equal(got, []string{"top", "near"}) {
+		t.Fatalf("no band: %v", got)
+	}
+	if Pace.ByUse {
+		t.Fatal("pace weighs no tokens, so the trace shouldn't show them")
 	}
 }
 
