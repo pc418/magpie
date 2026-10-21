@@ -132,9 +132,10 @@ var LeastUsed = Strategy{ByUse: true, Order: func(_ string, seats []Seat) []int 
 // that renews (Allowance.Pace), the most first: the account with the most
 // of its week per remaining hour has the most to lose at its reset. One
 // all but used up goes last, since it can answer only when nothing else
-// can. Equal paces keep their listed order: every account not known counts
-// as a whole week ahead of it (provider.FreshPace), and a key with no week
-// of its own has none.
+// can. A key that reads its own windows (a sub2api key's limits) goes by
+// them as an account does. Equal paces keep their listed order: every
+// account not known counts as a whole week ahead of it
+// (provider.FreshPace), and a key whose windows aren't known has none.
 var Pace = Strategy{Order: func(_ string, seats []Seat) []int {
 	idx := identity(len(seats))
 	sort.SliceStable(idx, func(a, b int) bool {
