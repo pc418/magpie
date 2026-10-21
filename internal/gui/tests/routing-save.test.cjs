@@ -56,7 +56,7 @@ function serve(lang, posts, off = []) {
 
 const ROUTINGS = [
   ["", "Smart", "智能"], ["order", "In order", "按顺序"], ["rotate", "In turn", "轮流"],
-  ["usage", "Least used first", "用量少的优先"], ["pace", "Weekly pace", "重置前用完"],
+  ["usage", "Least used first", "用量少的优先"], ["pace", "Weekly pace", "按进度"],
 ];
 const STAYS = [["", "Auto", "自动"], ["session", "Session", "整个会话"], ["turn", "Within a turn", "一轮之内"], ["off", "Off", "关闭"]];
 
