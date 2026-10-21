@@ -14,7 +14,7 @@ import (
 // and five days. One all but used up goes last; equal paces keep their
 // order; one not known counts as a fresh week, a Claude one too; one with
 // the five hours alone goes by what they have left per hour until they
-// renew (#576); a key with no week goes in its order.
+// renew (#576); a key whose windows aren't known goes in its order.
 //
 // PIN (2026-10-01): weekly pace is its own option, "pace"; Least used
 // keeps its most-left-first meaning and Smart is left as it is (yetone,
@@ -216,7 +216,8 @@ func TestWeeklyPace(t *testing.T) {
 	if got := order(acct("c@x.com"), acct("b@x.com"), acct("a@x.com")); got != "abc" {
 		t.Fatalf("the same from the other end: %s", got)
 	}
-	// keys have no week: their order, whatever was sent to them lately
+	// keys whose windows aren't known have no pace: their order, whatever
+	// was sent to them lately
 	key := func(id string) candidate {
 		return candidate{p: provider.Provider{ID: id, Key: "k"}, model: "gpt-5.6-sol", rest: id}
 	}

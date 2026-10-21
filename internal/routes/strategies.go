@@ -343,10 +343,11 @@ var LeastUsed = Strategy{ByUse: true, Order: func(_ string, seats []Seat) []int 
 // all but used up goes last, since it can answer only when nothing else
 // can — one that goes on on its credits first among those (Seat.Credits),
 // and one set to spend its credits before another account is never put
-// there (seatTier). Equal paces keep their listed order, wallets by what
-// they have left (Seat.Left, byLeft): every account not known counts as a
-// whole week ahead of it (provider.FreshPace), and a key with no week of
-// its own has none.
+// there (seatTier). A key that reads its own windows (a sub2api key's
+// limits) goes by them as an account does. Equal paces keep their listed
+// order, wallets by what they have left (Seat.Left, byLeft): every account
+// not known counts as a whole week ahead of it (provider.FreshPace), and a
+// key whose windows aren't known has none.
 var Pace = Strategy{Order: func(_ string, seats []Seat) []int {
 	left := byLeft(seats, nil)
 	idx := identity(len(seats))
