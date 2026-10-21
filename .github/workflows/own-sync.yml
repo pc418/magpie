@@ -16,9 +16,11 @@ name: Own sync
 #
 # A schedule runs on the default branch only, so `own` is the default branch.
 
+# Every third day of the month (owner 2026-10-21: "CI run every 3d"); the
+# month's end makes one gap a day or two short, which is one sync more.
 on:
   schedule:
-    - cron: '17 6 * * *'
+    - cron: '17 6 */3 * *'
   workflow_dispatch:
 
 # One sync at a time; a second waits for the first rather than cancel it
