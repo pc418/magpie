@@ -56,7 +56,7 @@ function serve(lang, scene) {
 
 const chip = { en: "By weight", zh: "按权重", ja: "重み付け", de: "Nach Gewicht" };
 const smart = { en: "Smart", zh: "智能", ja: "スマート", de: "Intelligent" };
-const pace = { en: "Weekly pace", zh: "重置前用完", ja: "週ペース", de: "Wochentempo" };
+const pace = { en: "Weekly pace", zh: "按进度", ja: "週ペース", de: "Wochentempo" };
 
 for (const engine of (process.env.BROWSER ? [process.env.BROWSER] : ["chromium", "webkit"])) {
   for (const lang of ["en", "zh", "ja", "de"]) {
