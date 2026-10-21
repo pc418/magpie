@@ -1501,7 +1501,7 @@ depends on the routing:
 | In turn | Where the rotation goes next. |
 | Smart | Only between accounts whose windows all renew in the same hours, or whose shares used are equal. |
 | Least used first | Only between accounts with the same share used and the same tokens sent lately. |
-| Weekly pace | Only between accounts with the same pace: in practice those not known yet (each a fresh week) and keys with no week. |
+| Weekly pace | Only between accounts with the same pace: in practice those not known yet (each a fresh week) and keys whose windows aren't read. |
 
 For Claude Code and Codex, *Make first* also signs the agent in to that
 account, because the account the agent is signed in to is first. With
