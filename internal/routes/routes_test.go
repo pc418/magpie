@@ -188,12 +188,46 @@ func TestLeastUsedSeatsWithNoShare(t *testing.T) {
 	}
 }
 
-// Use before expiry: the most of a week left per hour first; one running low
-// after, whatever its pace.
+// Use before expiry (pace): the most of a week left per hour first, one running low
+// by its pace like the rest; one all but used up last, whatever its pace;
+// equal paces, and the tokens sent lately, leave the listed order.
+//
+// PIN (2026-10-20, owner): pace is the one rule, spent last; the review's
+// 90% tier, learns-first, 10% bands and tokens tie-break are gone
+// (docs/261020-eval-WEEKLY_PACE_SIMPLIFY-routes_pace.md §6).
 func TestPace(t *testing.T) {
-	s := []Seat{{Key: "slow", Pace: 1}, {Key: "low", Used: 95, Pace: 50}, {Key: "fast", Pace: 10}}
-	if got := keys(s, Apply(Pace, "p", s)); !slices.Equal(got, []string{"fast", "slow", "low"}) {
+	s := []Seat{{Key: "slow", Pace: 1}, {Key: "low", Used: 95, Pace: 50}, {Key: "fast", Pace: 10}, {Key: "spent", Used: 98, Pace: 90}}
+	if got := keys(s, Apply(Pace, "p", s)); !slices.Equal(got, []string{"low", "fast", "slow", "spent"}) {
 		t.Fatalf("pace: %v", got)
+	}
+	// just under spent counts by its pace; two spent go by theirs
+	s = []Seat{{Key: "a", Pace: 1}, {Key: "under", Used: 97.9, Pace: 2}, {Key: "s1", Used: 100, Pace: 1}, {Key: "s2", Used: 98, Pace: 3}}
+	if got := keys(s, Apply(Pace, "p", s)); !slices.Equal(got, []string{"under", "a", "s2", "s1"}) {
+		t.Fatalf("spent boundary: %v", got)
+	}
+	// exact ties keep their order, whatever was sent to them lately
+	s = []Seat{{Key: "x", Pace: 0.5, Tokens: 900}, {Key: "y", Pace: 0.5, Tokens: 1}, {Key: "z", Pace: 0.5, Tokens: 50}}
+	if got := keys(s, Apply(Pace, "p", s)); !slices.Equal(got, []string{"x", "y", "z"}) {
+		t.Fatalf("ties: %v", got)
+	}
+	// a pace a twentieth below the top is behind it, not alike
+	s = []Seat{{Key: "near", Pace: 0.95, Tokens: 0}, {Key: "top", Pace: 1, Tokens: 900}}
+	if got := keys(s, Apply(Pace, "p", s)); !slices.Equal(got, []string{"top", "near"}) {
+		t.Fatalf("no band: %v", got)
+	}
+	// of the spent, one going on on its credits first; one set to spend
+	// its credits before another account isn't spent, and goes by its pace
+	s = []Seat{{Key: "s", Used: 100, Pace: 5}, {Key: "credits", Used: 100, Credits: true}, {Key: "first", Used: 100, Credits: true, First: true}, {Key: "a", Pace: 1}}
+	if got := keys(s, Apply(Pace, "p", s)); !slices.Equal(got, []string{"a", "first", "credits", "s"}) {
+		t.Fatalf("credits: %v, want [a first credits s]", got)
+	}
+	// wallets have no week: of equal paces, the one with more left first
+	s = []Seat{{Key: "w1", Known: true, Left: 5, LeftIn: "p\x00usd"}, {Key: "w2", Known: true, Left: 50, LeftIn: "p\x00usd"}, {Key: "sub", Pace: 0.2}}
+	if got := keys(s, Apply(Pace, "p", s)); !slices.Equal(got, []string{"sub", "w2", "w1"}) {
+		t.Fatalf("wallets: %v, want [sub w2 w1]", got)
+	}
+	if Pace.ByUse {
+		t.Fatal("pace weighs no tokens, so the trace shouldn't show them")
 	}
 }
 
@@ -254,7 +288,9 @@ func TestCreditsFirstOfTheSpent(t *testing.T) {
 		{Key: "low", Used: 92, Credits: true},
 		{Key: "fine", Used: 20},
 	}
-	for name, st := range map[string]Strategy{"smart": Smart, "pace": Pace, "least used": LeastUsed} {
+	// not Weekly pace: it has no running-low tier (PIN 2026-10-20, owner;
+	// TestPace holds its credits case)
+	for name, st := range map[string]Strategy{"smart": Smart, "least used": LeastUsed} {
 		if got := keys(s, Apply(st, "p", s)); !slices.Equal(got, []string{"fine", "low", "credits", "spent"}) {
 			t.Errorf("%s: %v", name, got)
 		}

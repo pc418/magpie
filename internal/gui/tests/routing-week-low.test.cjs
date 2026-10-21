@@ -5,7 +5,9 @@
 // alone (weekLow from the trace) now keeps its place under Smart and Use
 // before expiry, and its row doesn't say "kept for last"; one at 90% of its
 // five hours still does, now under Use before expiry too, which said
-// nothing before. In every language, at a window's width and at 420px, in
+// nothing before. Own: Use before expiry has no 90% tier (PIN 2026-10-20,
+// owner), so under it neither row says "kept for last" and none is dimmed;
+// Smart is upstream's. In every language, at a window's width and at 420px, in
 // both engines.
 const assert = require("node:assert/strict");
 const fs = require("node:fs/promises");
@@ -77,13 +79,14 @@ for (const engine of (process.env.BROWSER ? [process.env.BROWSER] : ["chromium",
               await page.goto("http://magpie.test/?view=routing");
               await page.locator(".rt-accts > li", { hasText: "cx-3@example.com" }).first().waitFor();
               const want = kept[lang];
-              await page.waitForFunction(([w]) => [...document.querySelectorAll(".rt-accts > li")].some((l) => l.textContent.includes("cx-3@example.com") && l.textContent.includes(w)), [want], { timeout: 4000 }).catch(() => {});
+              const held = routing !== "pace";
+              if (held) await page.waitForFunction(([w]) => [...document.querySelectorAll(".rt-accts > li")].some((l) => l.textContent.includes("cx-3@example.com") && l.textContent.includes(w)), [want], { timeout: 4000 }).catch(() => {});
               const five = await rowText(page, "cx-3@example.com");
-              assert.ok(five.includes(want), `${routing} ${lang} ${width}: five hours at 93% says "${five}", not "${want}"`);
+              assert.equal(five.includes(want), held, `${routing} ${lang} ${width}: five hours at 93% says "${five}"`);
               const week = await rowText(page, "cx-1@example.com");
               assert.ok(!week.includes(want), `${routing} ${lang} ${width}: a week at 91% renewing in 3h says "${week}"`);
               const lows = await page.evaluate(() => [...document.querySelectorAll(".rt-accts > li.low")].map((l) => l.textContent.includes("cx-1@") ? 1 : l.textContent.includes("cx-3@") ? 3 : 0));
-              assert.deepEqual(lows, [3], `${routing} ${lang} ${width}: rows dimmed as low`);
+              assert.deepEqual(lows, held ? [3] : [], `${routing} ${lang} ${width}: rows dimmed as low`);
               const over = await page.evaluate(() => document.documentElement.scrollWidth - innerWidth);
               assert.ok(over <= 1, `${lang} at ${width}: ${over}px past`);
               assert.deepEqual(errors, []);

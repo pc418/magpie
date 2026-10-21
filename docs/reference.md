@@ -2165,14 +2165,15 @@ result for every request: who went first, and why.
    a Claude Code subagent goes with its session's account.
 
 So routing decides who goes first only for a conversation nobody has
-answered yet. An account that has used 90% goes behind the others for new
-conversations, but a conversation already on it stays there until 98%.
+answered yet. Under Smart an account that has used 90% goes behind the
+others for new conversations, but a conversation already on it stays there
+until 98%.
 
 **The routings.** Smart, Least used first and Use before expiry go by the share
 used of the fullest window that counts the model, the 5-hour window
-included. Smart and Use before expiry put an account behind the others once a
-window is at 90% or more, and behind those once one is at 98% or more,
-each of these groups ordered by the share used.
+included. Smart puts an account behind the others once a window is at 90%
+or more, and behind those once one is at 98% or more, each of these groups
+ordered by the share used. Use before expiry puts one at 98% or more last.
 
 - **Smart** (the default): of the accounts under 90%, the one whose
   allowance renews soonest goes first, because what it has left is lost at
@@ -2230,14 +2231,13 @@ each of these groups ordered by the share used.
   expire (at least 1), is the window's pace when it is the higher, so 70 of
   500 credits expiring in 14 hours (1 per hour) beat a month's 100% over
   28 days. When the vendor doesn't say how much expires, all that is left
-  counts. Accounts whose
-  pace is within a tenth of the highest in their band count as alike, and
-  among them the one magpie sent the fewest tokens lately goes first. A
-  Claude or ChatGPT account not known goes first once, as in Smart (a
-  ChatGPT one while another is known); another unknown account counts as
-  a fresh week. A ChatGPT account whose usage
-  page can't be read is known from the week its answers tell, until a
-  reading works again.
+  counts. One at 98% or more of any window goes last, a Codex account going
+  on on its credits first among them, then by pace (one set to spend its
+  credits first keeps its place). An account not known, a Claude or ChatGPT
+  one too, counts as a fresh week (100% over 168 hours). Equal paces keep
+  their order; prepaid wallets, which have no week, go by what they have
+  left. A ChatGPT account whose usage page can't be read is known from the
+  week its answers tell, until a reading works again.
 - **Speed first**: the account, key or group member that answered this
   model fastest lately first. magpie keeps, in memory, how long each one's
   streamed answers took to their first token and how many tokens a second
@@ -2287,7 +2287,7 @@ depends on the routing:
 | In turn | Where the rotation goes next. |
 | Smart | Only between accounts whose windows all renew in the same hours, or whose shares used are equal. |
 | Least used first | Only between accounts with the same share used and the same tokens sent lately. |
-| Use before expiry | Only between accounts in the same pace band that magpie sent the same tokens lately, in practice none since magpie started. |
+| Use before expiry | Only between accounts with the same pace: in practice those not known yet (each a fresh week) and keys with no week. |
 | Speed first | Only between those within a tenth of each other's speed, and among those not measured lately. |
 | Cheapest first | Only between those that cost the same now, and among those with no known price. |
 

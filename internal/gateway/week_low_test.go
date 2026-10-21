@@ -61,13 +61,21 @@ func TestWeekLowIsSpentBeforeItsReset(t *testing.T) {
 		if !readyForNew([]Weighed{ws[1], ws[0]}, 1) {
 			t.Fatalf("%s: A at 91%% of its week alone isn't ready for a new conversation", name)
 		}
-		// at 92% of its five hours it is near a rate cap: kept for last
+		// at 92% of its five hours it is near a rate cap: Smart keeps it for
+		// last; pace has no 90% tier and keeps it first by its pace (own:
+		// PIN 2026-10-20, owner — spent last, nothing else)
 		share["a@x.com"] = plan(92, 91, 3*time.Hour)
-		if got, ws = order(); got != "ba" || ws[1].WeekLow {
-			t.Fatalf("%s: five hours at 92%%: %s weekLow %v, want ba, false", name, got, ws[1].WeekLow)
-		}
-		if readyForNew(ws, 1) {
-			t.Fatalf("%s: A at 92%% of its five hours is ready for a new conversation", name)
+		if routing == provider.Pace {
+			if got, ws = order(); got != "ab" || ws[0].WeekLow {
+				t.Fatalf("%s: five hours at 92%%: %s weekLow %v, want ab, false", name, got, ws[0].WeekLow)
+			}
+		} else {
+			if got, ws = order(); got != "ba" || ws[1].WeekLow {
+				t.Fatalf("%s: five hours at 92%%: %s weekLow %v, want ba, false", name, got, ws[1].WeekLow)
+			}
+			if readyForNew(ws, 1) {
+				t.Fatalf("%s: A at 92%% of its five hours is ready for a new conversation", name)
+			}
 		}
 		// all but used up: last, whatever its reset
 		share["a@x.com"] = plan(20, 98, 3*time.Hour)
