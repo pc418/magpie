@@ -46,7 +46,8 @@ func TestWalletLeftWithinItsTier(t *testing.T) {
 		{Key: "low", Known: true, Used: 95, Left: 9000, LeftIn: pts},
 		{Key: "room", Known: true, Used: 0, Left: 10, LeftIn: pts},
 	}
-	for _, st := range []Strategy{Smart, Pace, LeastUsed} {
+	// not Weekly pace: it has no running-low tier (PIN 2026-10-20, owner)
+	for _, st := range []Strategy{Smart, LeastUsed} {
 		if got := keys(s, Apply(st, "p", s)); got[0] != "room" {
 			t.Errorf("tier: %v", got)
 		}

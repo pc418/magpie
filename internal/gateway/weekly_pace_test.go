@@ -11,16 +11,18 @@ import (
 // Weekly pace puts first the account with the most of its week left per
 // hour until it renews — the one with the most to lose at its reset — not
 // the one with the most left: 20% left and an hour to go beats 60% left
-// and five days. Alike within a tenth go by the tokens sent lately, then
-// keep their order; one at 90% or more of any window waits behind the
-// rest, one all but used up behind those, each by how far; one not known
-// counts as a fresh week; one with the five hours alone goes by what
-// they have left per hour until they renew (#576); one that tells as it
-// answers goes first.
+// and five days. One all but used up goes last; equal paces keep their
+// order; one not known counts as a fresh week, a Claude one too; one with
+// the five hours alone goes by what they have left per hour until they
+// renew (#576); a key with no week goes in its order.
 //
 // PIN (2026-10-01): weekly pace is its own option, "pace"; Least used
 // keeps its most-left-first meaning and Smart is left as it is (yetone,
 // PR #517 review).
+//
+// PIN (2026-10-20, owner): pace is the one rule, spent last. The 90%
+// tier, learns-first, the 10% bands and the tokens tie-break the review
+// added are gone (docs/261020-eval-WEEKLY_PACE_SIMPLIFY-routes_pace.md §6).
 func TestWeeklyPace(t *testing.T) {
 	old := allowances
 	defer func() { allowances = old }()
@@ -58,11 +60,16 @@ func TestWeeklyPace(t *testing.T) {
 	if got := order(acct("b@x.com"), acct("a@x.com")); got != "ab" {
 		t.Fatalf("same deadline, most left first: %s", got)
 	}
-	// within a tenth alike: their order, for the cache
+	// a pace within a tenth of the other's is still behind it: no band
 	share["a@x.com"] = week(50, 76*time.Hour)
 	share["b@x.com"] = week(54, 76*time.Hour)
+	if got := order(acct("b@x.com"), acct("a@x.com")); got != "ab" {
+		t.Fatalf("the higher pace first, however close: %s", got)
+	}
+	// the same pace exactly: their order
+	share["b@x.com"] = week(50, 76*time.Hour)
 	if got := order(acct("b@x.com"), acct("a@x.com")); got != "ba" {
-		t.Fatalf("alike keep their order: %s", got)
+		t.Fatalf("equal paces keep their order: %s", got)
 	}
 	// all but used up: last, though its pace is the highest
 	share["a@x.com"] = week(40, 5*24*time.Hour)
@@ -70,22 +77,25 @@ func TestWeeklyPace(t *testing.T) {
 	if got := order(acct("b@x.com"), acct("a@x.com")); got != "ab" {
 		t.Fatalf("spent last: %s", got)
 	}
-	// its five hours at 90%, its week healthy and renewing soon: behind
-	// the fresh account all the same — the five hours are a rate cap it
-	// would be sent into before its allowance was read again
+	// its five hours at 95%, its week healthy and renewing soon: by its
+	// week's pace, ahead of the fresh account — not spent, it is not held
+	// back (a 429 from the five hours rests it)
 	share["a@x.com"] = provider.Allowance{
 		{Used: 95, Resets: now.Add(time.Hour), Span: 5 * time.Hour},
 		{Used: 10, Resets: now.Add(2 * time.Hour), Span: 7 * 24 * time.Hour},
 	}
 	share["b@x.com"] = week(0, 7*24*time.Hour)
-	if got := order(acct("a@x.com"), acct("b@x.com")); got != "ba" {
-		t.Fatalf("five hours running low wait: %s", got)
+	if got := order(acct("b@x.com"), acct("a@x.com")); got != "ab" {
+		t.Fatalf("five hours running low still go by pace: %s", got)
 	}
-	// two running low go by their share, ahead of one spent
+	// running low by its pace among the rest — first here, its week
+	// renewing in two hours (90 / 2 h against a's 60 / 120 h) — and ahead
+	// of one spent
 	share["c@x.com"] = provider.Allowance{{Used: 92, Resets: now.Add(time.Hour), Span: 5 * time.Hour}, {Used: 10, Resets: now.Add(2 * time.Hour), Span: 7 * 24 * time.Hour}}
+	share["a@x.com"] = week(40, 5*24*time.Hour)
 	share["b@x.com"] = week(99, time.Hour)
 	if got := order(acct("b@x.com"), acct("a@x.com"), acct("c@x.com")); got != "cab" {
-		t.Fatalf("low by share, then the spent: %s", got)
+		t.Fatalf("running low by pace, then the spent: %s", got)
 	}
 	delete(share, "c@x.com")
 	// Opus's own week decides an Opus request; Sonnet's goes by the general
@@ -117,26 +127,34 @@ func TestWeeklyPace(t *testing.T) {
 		t.Fatalf("not known as a fresh week: %s", got)
 	}
 	// one not known that tells what it has left as it answers (a Claude
-	// account) goes first, once: else it would never be known
+	// account) is a fresh week too: no first place to learn it
 	claude := func(user string) candidate {
 		c := acct(user)
 		c.p.Account.Agent, c.rest = "claude", "claude#"+user
 		return c
 	}
-	if got, _ := weigh(p, []candidate{claude("a@x.com"), claude("b@x.com"), claude("c@x.com")}, "gpt-5.6-sol", provider.Chat); got[0].p.Account.User != "c@x.com" {
-		t.Fatalf("one that learns goes first: %s", got[0].p.Account.User)
+	cl := func(cs ...candidate) string {
+		got, _ := weigh(p, cs, "gpt-5.6-sol", provider.Chat)
+		var s []string
+		for _, c := range got {
+			s = append(s, c.p.Account.User[:1])
+		}
+		return strings.Join(s, "")
+	}
+	if got := cl(claude("a@x.com"), claude("c@x.com"), claude("b@x.com")); got != "bca" {
+		t.Fatalf("one that learns goes by a fresh week: %s", got)
 	}
 	// ...and by its pace once its answer has told
 	share["c@x.com"] = week(50, 5*24*time.Hour) // 0.42, behind a's 0.5
-	if got, _ := weigh(p, []candidate{claude("c@x.com"), claude("a@x.com"), claude("b@x.com")}, "gpt-5.6-sol", provider.Chat); got[0].p.Account.User != "b@x.com" || got[1].p.Account.User != "a@x.com" {
-		t.Fatalf("known, it goes by its pace: %s %s", got[0].p.Account.User, got[1].p.Account.User)
+	if got := cl(claude("c@x.com"), claude("a@x.com"), claude("b@x.com")); got != "bac" {
+		t.Fatalf("known, it goes by its pace: %s", got)
 	}
 	delete(share, "c@x.com")
-	// at 90% exactly, running low; just under, not
-	share["a@x.com"] = provider.Allowance{{Used: 90, Resets: now.Add(time.Hour), Span: 5 * time.Hour}, {Used: 10, Resets: now.Add(2 * time.Hour), Span: 7 * 24 * time.Hour}}
-	share["b@x.com"] = provider.Allowance{{Used: 89.9, Resets: now.Add(time.Hour), Span: 5 * time.Hour}, {Used: 60, Resets: now.Add(5 * 24 * time.Hour), Span: 7 * 24 * time.Hour}}
-	if got := order(acct("a@x.com"), acct("b@x.com")); got != "ba" {
-		t.Fatalf("90%% is running low, 89.9%% is not: %s", got)
+	// just under all but used up, it goes by its pace (90 / 1 h)
+	share["a@x.com"] = provider.Allowance{{Used: 97.9, Resets: now.Add(time.Hour), Span: 5 * time.Hour}, {Used: 10, Resets: now.Add(time.Hour), Span: 7 * 24 * time.Hour}}
+	share["b@x.com"] = week(60, 5*24*time.Hour)
+	if got := order(acct("b@x.com"), acct("a@x.com")); got != "ab" {
+		t.Fatalf("97.9%% is not spent: %s", got)
 	}
 	// its five hours all but used up, its week healthy: last all the same
 	share["a@x.com"] = provider.Allowance{
@@ -147,15 +165,16 @@ func TestWeeklyPace(t *testing.T) {
 	if got := order(acct("a@x.com"), acct("b@x.com")); got != "ba" {
 		t.Fatalf("five hours spent: %s", got)
 	}
-	// both spent: the one with the least used first, it may yet answer
-	share["b@x.com"] = provider.Allowance{{Used: 100, Resets: now.Add(time.Hour), Span: 5 * time.Hour}, {Used: 10, Resets: now.Add(time.Hour), Span: 7 * 24 * time.Hour}}
+	// both spent: by their pace, as the rest — b, at 98% of its five
+	// hours, has the lower pace (50 / 1 h) than a at 100% (90 / 1 h)
+	share["b@x.com"] = provider.Allowance{{Used: 98, Resets: now.Add(time.Hour), Span: 5 * time.Hour}, {Used: 50, Resets: now.Add(time.Hour), Span: 7 * 24 * time.Hour}}
+	share["a@x.com"][0].Used = 100
 	if got := order(acct("b@x.com"), acct("a@x.com")); got != "ab" {
-		t.Fatalf("spent by how far: %s", got)
+		t.Fatalf("the spent by their pace: %s", got)
 	}
 	// the account has the five hours alone (Claude Enterprise): what they
 	// have left is lost within the hour, so it goes by that per hour,
-	// ahead of the one not known (a fresh week); alike within a tenth
-	// keep their order (#576)
+	// ahead of the one not known (a fresh week) (#576)
 	share["a@x.com"] = provider.Allowance{{Used: 80, Resets: now.Add(time.Hour), Span: 5 * time.Hour}} // 20 / 1 h
 	share["b@x.com"] = provider.Allowance{{Used: 5, Resets: now.Add(time.Hour), Span: 5 * time.Hour}}  // 95 / 1 h
 	share["c@x.com"] = provider.Allowance{{Used: 0, Resets: now.Add(time.Hour), Span: 5 * time.Hour}}  // 100 / 1 h
@@ -175,9 +194,8 @@ func TestWeeklyPace(t *testing.T) {
 	if got := order(acct("a@x.com"), acct("b@x.com")); got != "ba" {
 		t.Fatalf("a week renewing sooner with more to lose first: %s", got)
 	}
-	// three paces a twelfth apart: alike pairwise all round, yet an order
-	// — bands drawn from the top, so the first two are alike and the
-	// third is not; within a band, the tokens sent lately decide
+	// three paces a twelfth apart go by their pace alone, from either
+	// listing: what magpie sent them lately decides nothing
 	share["a@x.com"] = week(0, 100*time.Hour)  // 1.00
 	share["b@x.com"] = week(9, 100*time.Hour)  // 0.91
 	share["c@x.com"] = week(17, 100*time.Hour) // 0.83
@@ -192,27 +210,24 @@ func TestWeeklyPace(t *testing.T) {
 	sent(acct("a@x.com"), 3000)
 	sent(acct("b@x.com"), 2000)
 	sent(acct("c@x.com"), 1000)
-	if got := order(acct("a@x.com"), acct("b@x.com"), acct("c@x.com")); got != "bac" {
-		t.Fatalf("bands from the top, tokens within: %s", got)
+	if got := order(acct("a@x.com"), acct("b@x.com"), acct("c@x.com")); got != "abc" {
+		t.Fatalf("by pace, not tokens: %s", got)
 	}
-	if got := order(acct("c@x.com"), acct("b@x.com"), acct("a@x.com")); got != "bac" {
+	if got := order(acct("c@x.com"), acct("b@x.com"), acct("a@x.com")); got != "abc" {
 		t.Fatalf("the same from the other end: %s", got)
 	}
-	// one running low doesn't draw the bands for those ahead of it: its
-	// pace 1.05 would part a (1.00) from b (0.91), and a's tokens lose
-	share["c@x.com"] = provider.Allowance{{Used: 95, Resets: now.Add(time.Hour), Span: 5 * time.Hour}, {Used: 16, Resets: now.Add(80 * time.Hour), Span: 7 * 24 * time.Hour}}
-	if got := order(acct("a@x.com"), acct("b@x.com"), acct("c@x.com")); got != "bac" {
-		t.Fatalf("the bands are the healthy ones' alone: %s", got)
-	}
-	// keys have no week: by the tokens sent lately
+	// keys have no week: their order, whatever was sent to them lately
 	key := func(id string) candidate {
 		return candidate{p: provider.Provider{ID: id, Key: "k"}, model: "gpt-5.6-sol", rest: id}
 	}
 	sent(key("k1"), 500)
 	sent(key("k2"), 100)
 	kp := provider.Provider{ID: "keys", Routing: provider.Pace}
-	if got, _ := weigh(kp, []candidate{key("k1"), key("k2")}, "gpt-5.6-sol", provider.Chat); got[0].p.ID != "k2" {
-		t.Fatalf("keys by tokens: %s first", got[0].p.ID)
+	if got, _ := weigh(kp, []candidate{key("k1"), key("k2")}, "gpt-5.6-sol", provider.Chat); got[0].p.ID != "k1" {
+		t.Fatalf("keys in their order: %s first", got[0].p.ID)
+	}
+	if got, _ := weigh(kp, []candidate{key("k2"), key("k1")}, "gpt-5.6-sol", provider.Chat); got[0].p.ID != "k2" {
+		t.Fatalf("keys in their order, the other way: %s first", got[0].p.ID)
 	}
 	// a key follows the subscriptions with a week
 	if got, _ := weigh(p, []candidate{key("k2"), acct("a@x.com")}, "gpt-5.6-sol", provider.Chat); got[0].p.Account == nil {
