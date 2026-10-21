@@ -149,6 +149,22 @@ func TestPace(t *testing.T) {
 	if got := keys(s, Apply(Pace, "p", s)); !slices.Equal(got, []string{"top", "near"}) {
 		t.Fatalf("no band: %v", got)
 	}
+	// every listing of three paces gives the one order, and paces that
+	// differ in their last bits still order strictly: no epsilon makes
+	// them alike
+	for _, listed := range [][]float64{{1, 2, 3}, {3, 1, 2}, {2, 3, 1}, {1, 3, 2}, {3, 2, 1}} {
+		s = make([]Seat, len(listed))
+		for i, p := range listed {
+			s[i] = Seat{Key: string(rune('0' + p)), Pace: p}
+		}
+		if got := keys(s, Apply(Pace, "p", s)); !slices.Equal(got, []string{"3", "2", "1"}) {
+			t.Fatalf("paces listed %v: %v", listed, got)
+		}
+	}
+	s = []Seat{{Key: "1.0", Pace: 1.0}, {Key: "1.0000001", Pace: 1.0000001}}
+	if got := keys(s, Apply(Pace, "p", s)); !slices.Equal(got, []string{"1.0000001", "1.0"}) {
+		t.Fatalf("adjacent paces: %v", got)
+	}
 	if Pace.ByUse {
 		t.Fatal("pace weighs no tokens, so the trace shouldn't show them")
 	}
