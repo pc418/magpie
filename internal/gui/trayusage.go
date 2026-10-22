@@ -78,7 +78,8 @@ func trayUsageText(q provider.SubscriptionQuota, now time.Time, left, pace bool)
 		if q.Balance == "" {
 			return "", ""
 		}
-		return q.Balance, q.Name + " · " + q.Balance + trayAsOf(q)
+		// a percent in it turned as the windows are, said in the tooltip
+		return provider.BalanceText(q, left, ""), q.Name + " · " + provider.BalanceText(q, left, "left") + trayAsOf(q)
 	}
 	readAt := now
 	if q.ReadAt != nil && !q.ReadAt.After(now) {

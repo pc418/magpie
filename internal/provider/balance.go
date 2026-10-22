@@ -594,7 +594,8 @@ func readBalancePath(b []byte, path string) (string, error) {
 // BalancePart is one amount of a balance field, for a card to show each
 // of several on a line of its own, its label apart from its figure, rather
 // than all of them run together: Percent is its share, 0 to 100, when it
-// was asked as one ("%" after it), for a meter.
+// was asked as one ("%" after it), for a meter; what was used, as
+// readBalancePath tells it, which Used / Left turns (BalanceText).
 type BalancePart struct {
 	Label   string   `json:"label,omitempty"`
 	Text    string   `json:"text"`
@@ -615,6 +616,29 @@ func joinBalanceParts(parts []BalancePart) string {
 		}
 	}
 	return strings.Join(out, " · ")
+}
+
+// BalanceText is a card's balance on one line as Balance tells it, but,
+// where what is left is shown (left), each amount asked as a percent —
+// what was used of a plan — turned to what is left of it, as a window is
+// ("Daily 91.1%"), word after it ("left" where nothing else says which).
+// Balance itself otherwise.
+func BalanceText(q SubscriptionQuota, left bool, word string) string {
+	if !left || !slices.ContainsFunc(q.BalanceParts, func(p BalancePart) bool { return p.Percent != nil }) {
+		return q.Balance
+	}
+	parts := slices.Clone(q.BalanceParts)
+	for i, p := range parts {
+		if p.Percent == nil {
+			continue
+		}
+		n := 100 - math.Max(0, math.Min(100, *p.Percent))
+		parts[i].Text = strings.TrimSuffix(strconv.FormatFloat(n, 'f', 1, 64), ".0") + "%"
+		if word != "" {
+			parts[i].Text += " " + word
+		}
+	}
+	return joinBalanceParts(parts)
 }
 
 // readBalanceParts is readBalancePath's amounts, each apart.

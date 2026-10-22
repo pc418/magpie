@@ -66,6 +66,18 @@ func TestQuotaLines(t *testing.T) {
 	if got := plain(quotaLines(credits, true, false, 200, now)); !strings.Contains(got, "64% used") || !strings.Contains(got, "99% used") || !strings.Contains(got, "1.2K credits left") {
 		t.Errorf("credits:\n%s", got)
 	}
+	// a balance amount asked as a percent is what was used, and turns as
+	// the windows do, alone or beside them
+	pct := 8.9
+	share := []provider.BalancePart{{Label: "Daily", Text: "8.9%", Percent: &pct}, {Text: "$70.00"}}
+	bals := []provider.SubscriptionQuota{{Name: "Relay", Balance: "Daily 8.9% · $70.00", BalanceParts: share}, qs[0]}
+	bals[1].Balance, bals[1].BalanceParts = "Daily 8.9% · $70.00", share
+	if got := plain(quotaLines(bals, true, true, 200, now)); strings.Count(got, "Daily 91.1% · $70.00 left") != 2 || strings.Contains(got, "8.9%") {
+		t.Errorf("balance percent left:\n%s", got)
+	}
+	if got := plain(quotaLines(bals, true, false, 200, now)); strings.Count(got, "Daily 8.9% · $70.00 left") != 2 {
+		t.Errorf("balance percent used, as it was:\n%s", got)
+	}
 	if quotaLines(nil, false, false, 80, now) != nil {
 		t.Error("not asked yet: want nothing")
 	}

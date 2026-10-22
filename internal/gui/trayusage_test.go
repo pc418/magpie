@@ -69,6 +69,17 @@ func TestTrayUsageText(t *testing.T) {
 	if label, _ = trayUsageText(provider.SubscriptionQuota{Name: "DeepSeek", Balance: "¥12.30"}, now, false, false); label != "¥12.30" {
 		t.Errorf("balance label %q", label)
 	}
+	// a balance amount asked as a percent is what was used, and turns as
+	// the windows do: the figure bare, as theirs, the tooltip saying it
+	pct := 8.9
+	bal := provider.SubscriptionQuota{Name: "Relay", Balance: "Daily 8.9% · $70.00",
+		BalanceParts: []provider.BalancePart{{Label: "Daily", Text: "8.9%", Percent: &pct}, {Text: "$70.00"}}}
+	if label, tip = trayUsageText(bal, now, false, false); label != "Daily 8.9% · $70.00" || tip != "Relay · Daily 8.9% · $70.00" {
+		t.Errorf("balance percent used: %q %q", label, tip)
+	}
+	if label, tip = trayUsageText(bal, now, true, false); label != "Daily 91.1% · $70.00" || tip != "Relay · Daily 91.1% left · $70.00" {
+		t.Errorf("balance percent left: %q %q", label, tip)
+	}
 	// one read a while ago, standing in for one that couldn't be read now,
 	// says when it was read (#420)
 	read := time.Date(2026, 9, 27, 9, 5, 0, 0, time.Local)

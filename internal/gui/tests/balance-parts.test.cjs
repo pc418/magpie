@@ -9,8 +9,11 @@
 // one amount reads as it did. One the reply hadn't is "—" and says why on
 // hover (#1993). What a vendor says a balance is made of (DeepSeek's
 // granted credit and the money topped up, wwcraft_ on Discord) shows the
-// same way, its labels in the user's language. No left-border accent. English and Chinese,
-// Chromium and WebKit; no backend, the API is faked here.
+// same way, its labels in the user's language. No left-border accent. A
+// percent is what was used of a plan, so Used / Left turns it as it turns a
+// window: "5% left" and a 5% bar, still amber from 90% used, on the Usage
+// page and the panel, whose switch shows for a balance's percent alone.
+// English and Chinese, Chromium and WebKit; no backend, the API is faked here.
 const assert = require("node:assert/strict");
 const fs = require("node:fs/promises");
 const path = require("node:path");
@@ -29,7 +32,7 @@ const quotas = () => [
   { provider: "kimi", name: "Kimi", icon: "kimi-color", asOf: ago(45), windows: [{ name: "Weekly", used: 30 }] },
 ];
 
-function serve(lang, panel) {
+function serve(lang, panel, cards = quotas) {
   const settings = { theme: "light", lang, tray: "panel", quotaLeft: false, currency: "usd" };
   return async (route) => {
     const url = new URL(route.request().url());
@@ -38,8 +41,9 @@ function serve(lang, panel) {
     if (url.pathname === "/wails/runtime.js") return route.fulfill({ contentType: "text/javascript", body: "export const Window = {};" });
     if (url.pathname === "/api/state") return json({ agents: [], profiles: [], settings });
     if (url.pathname === "/api/settings") return json(settings);
+    if (url.pathname === "/api/settings/quota-left") { settings.quotaLeft = route.request().postDataJSON().on; return json(settings); }
     if (url.pathname === "/api/providers") return json({ providers: [], presets: [], excluded: [], gateway: { running: true, window: true } });
-    if (url.pathname === "/api/usage/quotas") return json(quotas());
+    if (url.pathname === "/api/usage/quotas") return json(cards());
     if (url.pathname === "/api/groups") return json({ groups: [], models: [] });
     if (url.pathname === "/api/plugins") return json({ plugins: [] });
     if (url.pathname.startsWith("/api/")) return json({});
@@ -50,8 +54,10 @@ function serve(lang, panel) {
 }
 
 const words = {
-  en: { granted: "Granted", topped: "Topped up", balance: "Balance", updated: "Updated 3 minutes ago", stale: /^As of .+ — couldn't be read just now$/, asOf: /^As of / },
-  zh: { granted: "赠送余额", topped: "充值余额", balance: "余额", updated: "3分钟前更新", stale: /^截至 .+，暂时无法获取最新额度$/, asOf: /^截至 / },
+  en: { granted: "Granted", topped: "Topped up", balance: "Balance", updated: "Updated 3 minutes ago", stale: /^As of .+ — couldn't be read just now$/, asOf: /^As of /,
+    left: "5% left", why: "The account's balance field as read: a percent shows what is used or left, as Used / Left says" },
+  zh: { granted: "赠送余额", topped: "充值余额", balance: "余额", updated: "3分钟前更新", stale: /^截至 .+，暂时无法获取最新额度$/, asOf: /^截至 /,
+    left: "剩余 5%", why: "账户余额字段的读数：百分比按「已用 / 剩余」切换显示已用或剩余" },
 };
 
 for (const engine of (process.env.BROWSER ? [process.env.BROWSER] : ["chromium", "webkit"])) {
@@ -146,6 +152,81 @@ for (const engine of (process.env.BROWSER ? [process.env.BROWSER] : ["chromium",
       const missing = await page.evaluate(() => ["As of {when}", "Updated {when}", "As of {when} — couldn't be read just now"].filter((k) => !I18N.zh[k])
         .concat(Object.keys(I18N).flatMap((l) => ["Granted", "Topped up"].filter((k) => !I18N[l][k]).map((k) => l + ":" + k))));
       assert.deepEqual(missing, [], "every string has its Chinese");
+      assert.deepEqual(errors, []);
+    });
+  }
+}
+
+// balances alone, one with a percent: no windows card for the switch to
+// show for
+const balancesOnly = () => quotas().slice(0, 4);
+
+for (const engine of (process.env.BROWSER ? [process.env.BROWSER] : ["chromium", "webkit"])) {
+  for (const lang of ["en", "zh"]) {
+    const w = words[lang];
+    test(`${engine} ${lang}: Used / Left turns a balance's percent as it turns a window`, async (t) => {
+      const browser = await (engine === "webkit" ? webkit.launch() : chromium.launch({ channel: "chromium" }));
+      const pages = [];
+      t.after(async () => {
+        if (process.env.ARTIFACT_DIR) {
+          await fs.mkdir(process.env.ARTIFACT_DIR, { recursive: true });
+          for (const [name, p] of pages) await p.screenshot({ path: path.join(process.env.ARTIFACT_DIR, `${engine}-${lang}-balance-left-${name}.png`) });
+        }
+        await browser.close();
+      });
+      const errors = [];
+      const open = async (name, url, viewport) => {
+        const page = await (await browser.newContext({ viewport, reducedMotion: "reduce" })).newPage();
+        pages.push([name, page]);
+        page.setDefaultTimeout(5000);
+        page.on("pageerror", (e) => errors.push(e.message));
+        await page.route("**/*", serve(lang, url.includes("mode=panel"), balancesOnly));
+        await page.goto(url);
+        return page;
+      };
+      const width = (loc) => loc.evaluate((e) => Math.round(parseFloat(e.style.width)));
+
+      // the Usage page: the switch is there for the percent, and turns it;
+      // the money and the "—" stay as they are
+      const page = await open("usage", "http://magpie.test/?view=usage", { width: 900, height: 700 });
+      const relay = page.locator(".subscription-card", { hasText: "My Relay" });
+      await relay.locator(".bal-part").first().waitFor();
+      assert.equal(await page.locator("#quotaMode").isVisible(), true, "Used / Left shows for a balance's percent");
+      assert.deepEqual(await relay.locator(".bal-part > b").allTextContents(), ["$2.00", "$2.50", "95%", "—"]);
+      assert.equal(await width(relay.locator(".bal-part .quota-track i")), 95);
+      assert.equal(await relay.locator(".quota-balance").getAttribute("title"), w.why);
+      await page.locator("#quotaMode .opt").nth(1).click();
+      await relay.locator(".bal-part > b", { hasText: w.left }).waitFor();
+      assert.deepEqual(await relay.locator(".bal-part > b").allTextContents(), ["$2.00", "$2.50", w.left, "—"]);
+      assert.equal(await width(relay.locator(".bal-part .quota-track i")), 5);
+      assert.equal(await relay.locator(".bal-part .quota-track.full").count(), 1, "amber by what is used, 95%");
+      // a balance with no percent: as it was, and its card says Used / Left leaves it
+      const plain = page.locator(".subscription-card", { hasText: "Plain" });
+      assert.deepEqual(await plain.locator(".quota-balance > b").allTextContents(), ["¥9.00"]);
+      assert.notEqual(await plain.locator(".quota-balance").getAttribute("title"), w.why);
+      await page.locator("#quotaMode .opt").nth(0).click();
+      await relay.locator(".bal-part > b", { hasText: "95%" }).waitFor();
+      assert.equal(await width(relay.locator(".bal-part .quota-track i")), 95);
+
+      // the panel's Balances: their own Used / Left, turning the percent
+      const panel = await open("panel", "http://magpie.test/?mode=panel", { width: 440, height: 640 });
+      await panel.locator('#ptabs [data-ptab="usage"]').click();
+      const card = panel.locator(".pq-card.bal", { hasText: "My Relay" });
+      await card.locator(".pq-amt").waitFor();
+      assert.deepEqual(await card.locator(".pq-bp > b").allTextContents(), ["$2.50", "95%", "—"]);
+      assert.equal(await width(card.locator(".quota-track i")), 95);
+      const mode = panel.locator(".pq-group", { has: panel.locator(".pq-card.bal") }).locator(".pq-gh .pq-mode");
+      assert.equal(await mode.count(), 1, "Used / Left over the balances");
+      await mode.click();
+      await card.locator(".pq-bp > b", { hasText: w.left }).waitFor();
+      assert.equal(await card.locator(".pq-amt").textContent(), "$2.00");
+      assert.deepEqual(await card.locator(".pq-bp > b").allTextContents(), ["$2.50", w.left, "—"]);
+      assert.equal(await width(card.locator(".quota-track.full i")), 5);
+      const pover = await panel.evaluate(() => [...document.querySelectorAll(".pq-card.bal")].filter((c) => c.scrollWidth > c.clientWidth + 1).length);
+      assert.equal(pover, 0, "nothing runs out of a balance's card");
+
+      const missing = await page.evaluate((k) => Object.keys(I18N).filter((l) => !I18N[l][k]), words.en.why);
+      assert.deepEqual(missing, [], "the new string in every language");
       assert.deepEqual(errors, []);
     });
   }

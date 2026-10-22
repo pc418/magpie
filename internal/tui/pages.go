@@ -1305,7 +1305,7 @@ func quotaLines(qs []provider.SubscriptionQuota, asked, left bool, width int, no
 		}
 		switch {
 		case q.Balance != "" && len(q.Windows) == 0:
-			c := sText.Render(q.Balance) + sMuted.Render(" left")
+			c := sText.Render(provider.BalanceText(q, left, "")) + sMuted.Render(" left")
 			if len(q.BalanceSplit) > 0 {
 				// what it is made of: DeepSeek's granted credit apart
 				c += sFaint.Render(" (" + provider.SplitWords(q.BalanceSplit) + ")")
@@ -1327,7 +1327,7 @@ func quotaLines(qs []provider.SubscriptionQuota, asked, left bool, width int, no
 			cells = append(cells, quotaCell(w, left, now))
 		}
 		if q.Balance != "" {
-			c := sText.Render(q.Balance) + sMuted.Render(" left")
+			c := sText.Render(provider.BalanceText(q, left, "")) + sMuted.Render(" left")
 			if q.Provider == "codex" && q.User != "" && !provider.CodexCredits(q.User) {
 				c += sFaint.Render(" · not spent") // held once a window is used up
 			}

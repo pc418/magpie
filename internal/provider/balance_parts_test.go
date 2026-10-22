@@ -77,3 +77,37 @@ func TestBalanceParts(t *testing.T) {
 		}
 	}
 }
+
+// A balance amount asked as a percent is what was used of a plan, so
+// where what is left is shown it turns as a window does: the reply from
+// the issue (windows.0.used 8.9, "Daily: windows.0.used / 100 %") reads
+// "Daily 91.1%" left; money, "—" and a balance with no percent stay as
+// they are, and nothing changes where what is used is shown.
+func TestBalanceTextLeft(t *testing.T) {
+	reply := []byte(`{"windows":[{"name":"daily","used":8.9},{"name":"weekly","used":100}],"credits":70}`)
+	parts, err := readBalanceParts(reply, "Daily: windows.0.used / 100 %; Week: windows.1.used / 100 %; $credits; Month: windows.5.used / 100 %")
+	if err != nil {
+		t.Fatal(err)
+	}
+	q := SubscriptionQuota{Balance: joinBalanceParts(parts), BalanceParts: cardParts(parts)}
+	if q.Balance != "Daily 8.9% · Week 100% · $70.00 · Month —" {
+		t.Fatalf("balance %q", q.Balance)
+	}
+	if got := BalanceText(q, false, "left"); got != q.Balance {
+		t.Errorf("used: %q, want %q", got, q.Balance)
+	}
+	if got, want := BalanceText(q, true, ""), "Daily 91.1% · Week 0% · $70.00 · Month —"; got != want {
+		t.Errorf("left: %q, want %q", got, want)
+	}
+	if got, want := BalanceText(q, true, "left"), "Daily 91.1% left · Week 0% left · $70.00 · Month —"; got != want {
+		t.Errorf("left, said: %q, want %q", got, want)
+	}
+	if q.BalanceParts[0].Text != "8.9%" {
+		t.Errorf("the card's own parts changed: %+v", q.BalanceParts[0])
+	}
+	// one amount alone, money, has no parts: as it is
+	money := SubscriptionQuota{Balance: "$2.00"}
+	if got := BalanceText(money, true, "left"); got != "$2.00" {
+		t.Errorf("money: %q", got)
+	}
+}
