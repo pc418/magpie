@@ -279,7 +279,13 @@ func trayCardText(lang string, q provider.SubscriptionQuota, now time.Time, left
 		if q.Balance == "" {
 			return "", ""
 		}
-		return q.Balance, q.Name + " · " + q.Balance + trayAsOf(lang, q)
+		// a percent in it turned as the windows are, said in the tooltip
+		// in lang (the page's word for Left)
+		word := "left"
+		if lang != "en" {
+			word = pageWord(lang, "Left")
+		}
+		return provider.BalanceShown(q, left, ""), q.Name + " · " + provider.BalanceShown(q, left, word) + trayAsOf(lang, q)
 	}
 	readAt := now
 	if q.ReadAt != nil && !q.ReadAt.After(now) {
