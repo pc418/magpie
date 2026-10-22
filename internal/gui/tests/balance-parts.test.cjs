@@ -57,9 +57,9 @@ function serve(lang, panel, cards = quotas) {
 
 const words = {
   en: { granted: "Granted", topped: "Topped up", balance: "Balance", updated: "Updated 3 minutes ago", stale: /^As of .+ — couldn't be read just now$/, asOf: /^As of /,
-    left: "5% left", why: "The account's balance field as read: a percent shows what is used or left, as Used / Left says" },
+    left: "5% left", leftOf: (n) => `${n} left`, why: "The account's balance field as read: a percent shows what is used or left, as Used / Left says" },
   zh: { granted: "赠送余额", topped: "充值余额", balance: "余额", updated: "3分钟前更新", stale: /^截至 .+，暂时无法获取最新额度$/, asOf: /^截至 /,
-    left: "剩余 5%", why: "账户余额字段的读数：百分比按「已用 / 剩余」切换显示已用或剩余" },
+    left: "剩余 5%", leftOf: (n) => `剩余 ${n}`, why: "账户余额字段的读数：百分比按「已用 / 剩余」切换显示已用或剩余" },
 };
 
 for (const engine of (process.env.BROWSER ? [process.env.BROWSER] : ["chromium", "webkit"])) {
@@ -164,9 +164,14 @@ for (const engine of (process.env.BROWSER ? [process.env.BROWSER] : ["chromium",
   }
 }
 
-// balances alone, one with a percent: no windows card for the switch to
-// show for
-const balancesOnly = () => quotas().slice(0, 4);
+// balances alone, some with a percent: no windows card for the switch to
+// show for. The editor's example of "%", credits.used / 70 %, with 63 of 70
+// used, as magpie reads it (TestBalancePercentExampleIsUsed); and two
+// shares under 90% used, the line amber starts on.
+const balancesOnly = () => [...quotas().slice(0, 4),
+  { provider: "credits", name: "Monthly Credits", icon: "generic", windows: [], balance: "90%", readAt: ago(0), balanceParts: [{ text: "90%", percent: 90 }] },
+  { provider: "light", name: "Light Use", icon: "generic", windows: [], balance: "Daily 8.9% · Week 89.9%", readAt: ago(0),
+    balanceParts: [{ label: "Daily", text: "8.9%", percent: 8.9 }, { label: "Week", text: "89.9%", percent: 89.9 }] }];
 
 for (const engine of (process.env.BROWSER ? [process.env.BROWSER] : ["chromium", "webkit"])) {
   for (const lang of ["en", "zh"]) {
@@ -202,11 +207,23 @@ for (const engine of (process.env.BROWSER ? [process.env.BROWSER] : ["chromium",
       assert.deepEqual(await relay.locator(".bal-part > b").allTextContents(), ["$2.00", "$2.50", "95%", "—"]);
       assert.equal(await width(relay.locator(".bal-part .quota-track i")), 95);
       assert.equal(await relay.locator(".quota-balance").getAttribute("title"), w.why);
+      // amber from 90% used: the example at 90 is, 8.9 and 89.9 aren't
+      const credits = page.locator(".subscription-card", { hasText: "Monthly Credits" });
+      const light = page.locator(".subscription-card", { hasText: "Light Use" });
+      const meters = async (card) => card.locator(".bal-part .quota-track").evaluateAll((ts) => ts.map((e) => [Math.round(parseFloat(e.querySelector("i").style.width)), e.classList.contains("full")]));
+      assert.deepEqual(await credits.locator(".bal-part > b").allTextContents(), ["90%"]);
+      assert.deepEqual(await meters(credits), [[90, true]]);
+      assert.deepEqual(await light.locator(".bal-part > b").allTextContents(), ["8.9%", "89.9%"]);
+      assert.deepEqual(await meters(light), [[9, false], [90, false]]);
       await page.locator("#quotaMode .opt").nth(1).click();
       await relay.locator(".bal-part > b", { hasText: w.left }).waitFor();
       assert.deepEqual(await relay.locator(".bal-part > b").allTextContents(), ["$2.00", "$2.50", w.left, "—"]);
       assert.equal(await width(relay.locator(".bal-part .quota-track i")), 5);
       assert.equal(await relay.locator(".bal-part .quota-track.full").count(), 1, "amber by what is used, 95%");
+      assert.deepEqual(await credits.locator(".bal-part > b").allTextContents(), [w.leftOf("10%")]);
+      assert.deepEqual(await meters(credits), [[10, true]], "amber by what is used, 90%");
+      assert.deepEqual(await light.locator(".bal-part > b").allTextContents(), [w.leftOf("91.1%"), w.leftOf("10.1%")]);
+      assert.deepEqual(await meters(light), [[91, false], [10, false]], "not amber under 90% used, left or not");
       // a balance with no percent: as it was, and its card says Used / Left leaves it
       const plain = page.locator(".subscription-card", { hasText: "Plain" });
       assert.deepEqual(await plain.locator(".quota-balance > b").allTextContents(), ["¥9.00"]);
@@ -222,6 +239,9 @@ for (const engine of (process.env.BROWSER ? [process.env.BROWSER] : ["chromium",
       await card.locator(".pq-amt").waitFor();
       assert.deepEqual(await card.locator(".pq-bp > b").allTextContents(), ["$2.50", "95%", "—"]);
       assert.equal(await width(card.locator(".quota-track i")), 95);
+      const pmeters = async (name) => panel.locator(".pq-card.bal", { hasText: name }).locator(".quota-track").evaluateAll((ts) => ts.map((e) => [Math.round(parseFloat(e.querySelector("i").style.width)), e.classList.contains("full")]));
+      assert.deepEqual(await pmeters("Monthly Credits"), [[90, true]]);
+      assert.deepEqual(await pmeters("Light Use"), [[9, false], [90, false]]);
       const mode = panel.locator(".pq-group", { has: panel.locator(".pq-card.bal") }).locator(".pq-gh .pq-mode");
       assert.equal(await mode.count(), 1, "Used / Left over the balances");
       await mode.click();
@@ -229,9 +249,20 @@ for (const engine of (process.env.BROWSER ? [process.env.BROWSER] : ["chromium",
       assert.equal(await card.locator(".pq-amt").textContent(), "$2.00");
       assert.deepEqual(await card.locator(".pq-bp > b").allTextContents(), ["$2.50", w.left, "—"]);
       assert.equal(await width(card.locator(".quota-track.full i")), 5);
+      assert.equal(await panel.locator(".pq-card.bal", { hasText: "Monthly Credits" }).locator(".pq-amt").textContent(), w.leftOf("10%"));
+      assert.deepEqual(await pmeters("Monthly Credits"), [[10, true]]);
+      assert.deepEqual(await pmeters("Light Use"), [[91, false], [10, false]]);
       const pover = await panel.evaluate(() => [...document.querySelectorAll(".pq-card.bal")].filter((c) => c.scrollWidth > c.clientWidth + 1).length);
       assert.equal(pover, 0, "nothing runs out of a balance's card");
 
+      // the editor's hint gives "%" as the share used, in every language
+      const hint = await page.evaluate(() => {
+        const k = Object.keys(I18N.zh).filter((x) => x.startsWith("Where the amount is in the reply"));
+        return k.length === 1 ? [k[0], ...Object.keys(I18N).map((l) => I18N[l][k[0]] || l + ": missing")] : k;
+      });
+      assert.equal(hint.length, 1 + (await page.evaluate(() => Object.keys(I18N).length)), "one hint");
+      assert.match(hint[0], /credits\.used \/ 70 %; .*"%" after it shows the share used, with a bar/);
+      for (const h of hint) assert(h.includes("credits.used / 70 %") && !h.includes("(1 - "), h);
       const missing = await page.evaluate((k) => Object.keys(I18N).filter((l) => !I18N[l][k]), words.en.why);
       assert.deepEqual(missing, [], "the new string in every language");
       assert.deepEqual(errors, []);

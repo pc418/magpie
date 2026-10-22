@@ -122,13 +122,13 @@ const providerUsage = `usage:
                                    (a model on this computer or the local network: Settings' redaction leaves its
                                     requests as written; not for a local relay that passes them on to a vendor)
        magpie provider add "My Relay" url=https://relay.example.com/v1 key=sk-… balance=https://relay.example.com/api/usage/token balance.path='$data.total_available / 500000'
-       magpie provider set my-relay balance.path='(1 - credits.monthlyCredits / 70) %'
+       magpie provider set my-relay balance.path='credits.used / 70 %'
        magpie provider set my-relay balance.method=POST
                                    (a balance endpoint that answers only a POST: asked with no body)
        magpie provider set my-relay balance=https://relay.example.com/api/user/self balance.path='$data.quota / 500000' balance.token=<access token> header.New-Api-User=<user id>
                                    (a new-api relay's whole account: its access token and user id, from its personal settings)
                                    (balance.path: where the amount is in the reply, or a sum of those with + - * / and
-                                    brackets; $ or ¥ in front adds the sign, % after it shows a percent of 1;
+                                    brackets; $ or ¥ in front adds the sign, % after it shows the share used, a percent of 1;
                                     several go apart by ; each with a label: '5h: a.used / a.cap %; $credits.left';
                                     a list's items are a.*.used, or a[status=active].used for those that match,
                                     in sum() max() min() count(): 'sum(a.*.used) / sum(a.*.cap) %'; one the reply

@@ -573,9 +573,10 @@ func readAiHubMixAccount(b []byte) (string, error) {
 // items by their index: "data.total_available", "balance_infos.0.total_balance".
 // It can be sums of paths and numbers, with + - * / and brackets, for a
 // relay counting in its own units ("data.total_available / 500000") or
-// telling what was used of a plan ("(1 - credits.monthlyCredits / 70) %").
-// A "$" or "¥" before it is put in front of the amount; a "%" after it
-// shows it as a percent of 1 (0.25 is 25%). A path alone that is not a
+// telling what was used of a plan ("(1 - credits.monthlyCredits / 70) %",
+// the credits left of 70). A "$" or "¥" before it is put in front of the
+// amount; a "%" after it shows it as a percent of 1 (0.25 is 25%), the
+// share used, which Used / Left turns as a window's. A path alone that is not a
 // number is shown as it is. A path through a list's items ("a.*.used",
 // "a[status=active].used") is several values, which sum(), max(), min()
 // or count() make one (balanceExpr). Several amounts, each with a label if
