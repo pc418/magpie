@@ -147,7 +147,41 @@ func TestBalanceLine(t *testing.T) {
 	if len(r) != 1 || len(r[0].BalanceParts) != 1 || r[0].BalanceParts[0].Percent == nil {
 		t.Fatalf("parts not carried: %+v", r)
 	}
-	if b, _ := json.Marshal(r[0]); strings.Contains(string(b), "balanceParts") || strings.Contains(string(b), "percent") {
-		t.Errorf("sent: %s", b)
+	b, err := json.Marshal(r[0])
+	if err != nil {
+		t.Fatal(err)
+	}
+	var sent map[string]any
+	if err := json.Unmarshal(b, &sent); err != nil {
+		t.Fatal(err)
+	}
+	for k, want := range map[string]any{"provider": "relay", "name": "Relay", "kind": "balance", "balance": "Daily 8.9%"} {
+		if sent[k] != want {
+			t.Errorf("sent %s = %v, want %v: %s", k, sent[k], want, b)
+		}
+	}
+	if _, ok := sent["balanceParts"]; ok || strings.Contains(string(b), "percent") {
+		t.Errorf("parts sent: %s", b)
+	}
+}
+
+// The editor's example of "%", credits.used / 70 %, is the share used: 63
+// of 70 used reads 90% with Used on and "10% left" with Left on.
+func TestBalancePercentExampleIsUsed(t *testing.T) {
+	parts, err := readBalanceParts([]byte(`{"credits":{"used":63}}`), "credits.used / 70 %")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(parts) != 1 || parts[0].Text != "90%" || parts[0].Percent == nil || *parts[0].Percent != 90 {
+		t.Fatalf("parts %+v", parts)
+	}
+	balance := joinBalanceParts(parts)
+	for _, c := range []struct {
+		left bool
+		want string
+	}{{false, "90%"}, {true, "10% left"}} {
+		if figure, word := BalanceLine(balance, parts, c.left); figure+word != c.want {
+			t.Errorf("left %v: %q, want %q", c.left, figure+word, c.want)
+		}
 	}
 }
