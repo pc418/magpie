@@ -13721,7 +13721,7 @@ function accountQuota(data, user, capFor = () => 0, settable = null, prov) {
   const noPlan = q?.plan === "No plan" ? [t("No plan")] : [];
   if (q && !q.error && !q.windows?.length && q.balance) {
     // no rolling limits, only what is left to spend
-    line.append(el("span", "aq-none", [...noPlan, t("Balance") + " " + q.balance].join(" · ")));
+    line.append(el("span", "aq-none", [...noPlan, t("Balance") + " " + balanceLine(q)].join(" · ")));
     return line;
   }
   if (!q || q.error || !q.windows?.length) {
@@ -13731,8 +13731,8 @@ function accountQuota(data, user, capFor = () => 0, settable = null, prov) {
   }
   if (q.balance) {
     const balance = el("span", "aq-w aq-balance");
-    balance.title = t("What is left on the account besides its windows");
-    balance.append(el("span", "aq-n", t("Balance")), el("b", "", q.balance));
+    balance.title = balanceWhy(q, "What is left on the account besides its windows");
+    balance.append(el("span", "aq-n", t("Balance")), el("b", "", balanceLine(q)));
     line.append(balance);
   }
   // the two rolling windows fit a line; the per-model ones go in its
@@ -15752,10 +15752,10 @@ function renderQuotas(lazy) {
   subscriptions.replaceChildren();
   // the allowances' own heading, apart from the period's cost: used or
   // left turns their meters, and is only there when some card has one (a
-  // balance is only ever what is left)
+  // balance is what is left, but for an amount asked as a percent)
   $("#quotaHead").hidden = !!quotas && !quotas.length;
   const pick = $("#quotaMode");
-  pick.hidden = !quotas?.some((q) => !q.error && q.windows?.length);
+  pick.hidden = !quotas?.some((q) => !q.error && (q.windows?.length || balancePercent(q)));
   if (!pick.hidden) {
     pick.replaceChildren();
     for (const [left, name] of [[false, "Used"], [true, "Left"]]) {
@@ -17292,12 +17292,7 @@ function renderPanelQuota(lazy) {
     }
     // whether the rings say what is used or what is left, once above them,
     // turned here as by a ring (#184)
-    if (qs.some((q) => !q.error && q.windows?.length)) {
-      const m = el("button", "pq-mode", t(quotaLeft ? "Left" : "Used"));
-      m.title = t(quotaLeft ? "Show how much of each window is used" : "Show how much of each window is left");
-      m.onclick = () => setQuotaLeft(!quotaLeft);
-      head.append(m);
-    }
+    if (qs.some((q) => !q.error && q.windows?.length)) head.append(panelQuotaMode());
     g.append(head);
     const all = qs.length > 1 && quotaAllOf(qs, "pq-all", 3);
     if (all) g.append(all);
@@ -17324,12 +17319,22 @@ function renderPanelQuota(lazy) {
   requestAnimationFrame(focusQuotaCard);
 }
 
+// panelQuotaMode: the Used / Left button over a group's meters (#184).
+function panelQuotaMode() {
+  const m = el("button", "pq-mode", t(quotaLeft ? "Left" : "Used"));
+  m.title = t(quotaLeft ? "Show how much of each window is used" : "Show how much of each window is left");
+  m.onclick = () => setQuotaLeft(!quotaLeft);
+  return m;
+}
+
 // panelBalances is a run of balances on the Allowances tab, under their
-// heading, as figures side by side.
+// heading, as figures side by side; Used / Left over them when one has an
+// amount asked as a percent, a meter it turns.
 function panelBalances(bals) {
   const g = el("div", "pq-group");
   const head = el("div", "pq-gh");
   head.append(el("span", "pq-gn", t("Balances")));
+  if (bals.some(balancePercent)) head.append(panelQuotaMode());
   g.append(head);
   const grid = el("div", "pq-bals");
   for (const q of bals) {
@@ -17473,7 +17478,7 @@ function panelQuotaCard(q) {
   who.append(el("span", "pq-user" + (q.alias && q.named ? " own-name" : ""), q.alias || q.user || q.name));
   if ((q.user || q.alias) && window.hideAccounts) who.append(hideAccounts.eye(q.user || q.alias, q.provider));
   card.append(who);
-  card.title = [q.name, q.alias, q.user, q.seat && q.seat !== q.alias && "≡ " + q.seat, q.plan, q.until ? planTerm(q) : "", q.balance && t("Balance") + " " + q.balance].filter(Boolean).join(" · ");
+  card.title = [q.name, q.alias, q.user, q.seat && q.seat !== q.alias && "≡ " + q.seat, q.plan, q.until ? planTerm(q) : "", q.balance && t("Balance") + " " + balanceLine(q)].filter(Boolean).join(" · ");
   if (q.error) {
     card.classList.add("err");
     card.append(pqLine(quotaError(q.error, q), q, " err"));
@@ -18165,7 +18170,7 @@ function fitQuota(g) {
 function balanceRow(sub, why, when = true) {
   const parts = balanceShown(sub);
   const b = el("div", "quota-balance" + (parts?.length ? " parts" : ""));
-  b.title = t(why);
+  b.title = balanceWhy(sub, why);
   if (!parts?.length) b.append(el("span", "", t("Balance")), el("b", "", sub.balance));
   for (const [i, p] of (parts || []).entries()) {
     const row = el("div", "bal-part" + (i ? "" : " lead"));
@@ -18199,6 +18204,22 @@ function balanceMeter(percent) {
   fill.style.width = (quotaLeft ? 100 - used : used) + "%";
   track.append(fill);
   return track;
+}
+// balanceLine: a balance on one line, as q.balance tells it, its percents
+// as balanceText says them.
+function balanceLine(q) {
+  if (!quotaLeft || !balancePercent(q)) return q.balance;
+  return q.balanceParts.map((p) => [p.label, balanceText(p)].filter(Boolean).join(" ")).join(" · ");
+}
+// balancePercent: whether a card's balance has an amount asked as a
+// percent, which Used / Left turns.
+function balancePercent(q) {
+  return !!q.balanceParts?.some((p) => p.percent != null);
+}
+// balanceWhy: a balance's tooltip, why, but for one with a percent, which
+// is what was used, not "what is left"
+function balanceWhy(q, why) {
+  return t(balancePercent(q) ? "The account's balance field as read: a percent shows what is used or left, as Used / Left says" : why);
 }
 
 // balanceText: a part's figure; a percent one on Left says what is left

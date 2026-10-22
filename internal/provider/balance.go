@@ -597,7 +597,8 @@ func readBalancePath(b []byte, path string) (string, error) {
 // BalancePart is one amount of a balance field, for a card to show each
 // of several on a line of its own, its label apart from its figure, rather
 // than all of them run together: Percent is its share, 0 to 100, when it
-// was asked as one ("%" after it), for a meter.
+// was asked as one ("%" after it), for a meter; what was used, as
+// readBalancePath tells it, which Used / Left turns (BalanceShown).
 type BalancePart struct {
 	Label   string   `json:"label,omitempty"`
 	Text    string   `json:"text"`
@@ -618,6 +619,49 @@ func joinBalanceParts(parts []BalancePart) string {
 		}
 	}
 	return strings.Join(out, " · ")
+}
+
+// BalanceShown is a card's balance on one line as Balance tells it, but,
+// where what is left is shown (left), each amount asked as a percent —
+// what was used of a plan — turned to what is left of it, as a window is
+// ("Daily 91.1%"), word after it ("left" where nothing else says which).
+// Balance itself otherwise.
+func BalanceShown(q SubscriptionQuota, left bool, word string) string {
+	return balanceTurned(q.Balance, q.BalanceParts, left, word)
+}
+
+// BalanceLine is a balance as a line of text says it, its figure and the
+// word after it apart for styling. Money, a count or "—" at the line's
+// end is followed by " left", as it always was. An amount asked as a
+// percent is what was used, so it never is: it reads bare where what is
+// used is shown, "91.1% left" where what is left is (left). The TUI's
+// Usage page passes its Used / Left; magpie quota, whose % is what is
+// used, passes false.
+func BalanceLine(balance string, parts []BalancePart, left bool) (figure, word string) {
+	figure = balanceTurned(balance, parts, left, "left")
+	if n := len(parts); n > 0 && parts[n-1].Percent != nil {
+		return figure, ""
+	}
+	return figure, " left"
+}
+
+// balanceTurned is BalanceShown's line from the balance and its parts.
+func balanceTurned(balance string, parts []BalancePart, left bool, word string) string {
+	if !left || !slices.ContainsFunc(parts, func(p BalancePart) bool { return p.Percent != nil }) {
+		return balance
+	}
+	parts = slices.Clone(parts)
+	for i, p := range parts {
+		if p.Percent == nil {
+			continue
+		}
+		n := 100 - math.Max(0, math.Min(100, *p.Percent))
+		parts[i].Text = strings.TrimSuffix(strconv.FormatFloat(n, 'f', 1, 64), ".0") + "%"
+		if word != "" {
+			parts[i].Text += " " + word
+		}
+	}
+	return joinBalanceParts(parts)
 }
 
 // readBalanceParts is readBalancePath's amounts, each apart.
