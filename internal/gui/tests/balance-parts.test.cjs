@@ -30,6 +30,8 @@ const quotas = () => [
     balanceSplit: [{ label: "Granted", text: "¥10.00" }, { label: "Topped up", text: "¥100.00" }] },
   { provider: "plain", name: "Plain", icon: "generic", windows: [], balance: "¥9.00", readAt: ago(0) },
   { provider: "kimi", name: "Kimi", icon: "kimi-color", asOf: ago(45), windows: [{ name: "Weekly", used: 30 }] },
+  { provider: "plan", name: "Coding Plan", icon: "generic", windows: [{ name: "Weekly", used: 20 }], balance: "Daily 8.9%", readAt: ago(0),
+    balanceParts: [{ label: "Daily", text: "8.9%", percent: 8.9 }] },
 ];
 
 function serve(lang, panel, cards = quotas) {
@@ -122,6 +124,10 @@ for (const engine of (process.env.BROWSER ? [process.env.BROWSER] : ["chromium",
       assert.match(await other.locator(".quota-read.stale").textContent(), w.stale);
       const kimi = page.locator(".subscription-card", { hasText: "Kimi" });
       assert.match(await kimi.locator(".quota-read.stale").textContent(), w.stale, "a windows card stale too");
+      // a balance beside windows whose amount is a percent, what was used:
+      // its tooltip doesn't call it what is left
+      const plan = page.locator(".subscription-card", { hasText: "Coding Plan" });
+      assert.equal(await plan.locator(".quota-balance").getAttribute("title"), w.why);
       const border = await page.evaluate(() => [...document.querySelectorAll(".subscription-card, .subscription-card *")].map((e) => getComputedStyle(e).borderLeftWidth).filter((b) => parseFloat(b) > 1));
       assert.deepEqual(border, [], "no left-border accent");
       const over = await page.evaluate(() => [...document.querySelectorAll(".subscription-card")].filter((c) => c.scrollWidth > c.clientWidth + 1).length);
@@ -146,6 +152,7 @@ for (const engine of (process.env.BROWSER ? [process.env.BROWSER] : ["chromium",
       assert.match(await stale.locator(".pq-asof").textContent(), w.asOf);
       assert.match((await stale.getAttribute("title")).split("\n")[1], w.stale);
       assert.equal(await panel.locator(".pq-card.bal", { hasText: "Plain" }).locator(".pq-amt").textContent(), "¥9.00");
+      assert.equal(await panel.locator(".pq-card", { has: panel.locator(".quota-balance") }).filter({ hasText: "Daily" }).locator(".quota-balance").getAttribute("title"), w.why);
       const pover = await panel.evaluate(() => [...document.querySelectorAll(".pq-card.bal")].filter((c) => c.scrollWidth > c.clientWidth + 1).length);
       assert.equal(pover, 0, "nothing runs out of a balance's card");
 

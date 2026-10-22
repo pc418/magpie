@@ -155,7 +155,7 @@ func printQuotas(qs []provider.Quota) {
 			line += "  " + quotaCell(w, now)
 		}
 		if q.Balance != "" {
-			line += "  " + balanceCell(q.Balance, q.Provider, q.User)
+			line += "  " + balanceCell(q.Balance, q.BalanceParts, q.Provider, q.User)
 			if len(q.BalanceSplit) > 0 {
 				// what it is made of: DeepSeek's granted credit apart
 				line += muted.Render(" (" + provider.SplitWords(q.BalanceSplit) + ")")
@@ -174,9 +174,11 @@ func printQuotas(qs []provider.Quota) {
 }
 
 // balanceCell is what an account holds in a line: "1.2K credits left",
-// and "· not spent" for a Codex account set not to spend its credits.
-func balanceCell(balance, id, user string) string {
-	cell := bold.Render(balance) + muted.Render(" left")
+// an amount asked as a percent as what is used (BalanceLine), and "· not
+// spent" for a Codex account set not to spend its credits.
+func balanceCell(balance string, parts []provider.BalancePart, id, user string) string {
+	figure, word := provider.BalanceLine(balance, parts, false)
+	cell := bold.Render(figure) + muted.Render(word)
 	if id == "codex" && user != "" && !provider.CodexCredits(user) {
 		cell += muted.Render(" · not spent")
 	}

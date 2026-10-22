@@ -72,11 +72,21 @@ func TestQuotaLines(t *testing.T) {
 	share := []provider.BalancePart{{Label: "Daily", Text: "8.9%", Percent: &pct}, {Text: "$70.00"}}
 	bals := []provider.SubscriptionQuota{{Name: "Relay", Balance: "Daily 8.9% · $70.00", BalanceParts: share}, qs[0]}
 	bals[1].Balance, bals[1].BalanceParts = "Daily 8.9% · $70.00", share
-	if got := plain(quotaLines(bals, true, true, 200, now)); strings.Count(got, "Daily 91.1% · $70.00 left") != 2 || strings.Contains(got, "8.9%") {
+	if got := plain(quotaLines(bals, true, true, 200, now)); strings.Count(got, "Daily 91.1% left · $70.00 left") != 2 || strings.Contains(got, "8.9%") {
 		t.Errorf("balance percent left:\n%s", got)
 	}
 	if got := plain(quotaLines(bals, true, false, 200, now)); strings.Count(got, "Daily 8.9% · $70.00 left") != 2 {
 		t.Errorf("balance percent used, as it was:\n%s", got)
+	}
+	// a percent last on the line is never "left" with Used on: it is what
+	// was used; with Left on it is what is left, said once
+	alone := []provider.SubscriptionQuota{{Name: "Relay", Balance: "Daily 8.9%", BalanceParts: share[:1]}, qs[0]}
+	alone[1].Balance, alone[1].BalanceParts = "Daily 8.9%", share[:1]
+	if got := plain(quotaLines(alone, true, false, 200, now)); strings.Count(got, "Daily 8.9%") != 2 || strings.Contains(got, "8.9% left") {
+		t.Errorf("balance percent alone, used:\n%s", got)
+	}
+	if got := plain(quotaLines(alone, true, true, 200, now)); strings.Count(got, "Daily 91.1% left") != 2 || strings.Contains(got, "left left") {
+		t.Errorf("balance percent alone, left:\n%s", got)
 	}
 	if quotaLines(nil, false, false, 80, now) != nil {
 		t.Error("not asked yet: want nothing")

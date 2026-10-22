@@ -85,6 +85,10 @@ type Quota struct {
 	// BalanceSplit is what the Balance is made of, when the vendor tells
 	// it (SubscriptionQuota's)
 	BalanceSplit []BalancePart `json:"balanceSplit,omitempty"`
+	// BalanceParts are the Balance's amounts each apart
+	// (SubscriptionQuota's), for magpie quota's line (BalanceLine); not
+	// sent, Balance tells them
+	BalanceParts []BalancePart `json:"-"`
 	Error        string        `json:"error,omitempty"`
 	AsOf         *time.Time    `json:"asOf,omitempty"` // the cached reading's time, nil for a new one
 	// ReadDeferred says no request was made this time, rather than one failed.
@@ -181,7 +185,7 @@ func quotaReport(subs, plans, balances []SubscriptionQuota, now time.Time) []Quo
 	}{{"subscription", subs}, {"plan", plans}, {"balance", balances}} {
 		for _, q := range g.qs {
 			r := Quota{Provider: q.Provider, Name: q.Name, Kind: g.kind, Plan: q.Plan, User: q.User, AsOf: q.AsOf, ReadAt: q.ReadAt, ReadDeferred: q.ReadDeferred,
-				Windows: []QuotaSpan{}, Balance: q.Balance, BalanceSplit: q.BalanceSplit, Error: q.Error, Until: q.Until, Renew: q.Renew, Resets: q.Resets, ResetsUsed: q.ResetsUsed, From: q.From, Alias: q.Alias, Seat: q.Seat}
+				Windows: []QuotaSpan{}, Balance: q.Balance, BalanceSplit: q.BalanceSplit, BalanceParts: q.BalanceParts, Error: q.Error, Until: q.Until, Renew: q.Renew, Resets: q.Resets, ResetsUsed: q.ResetsUsed, From: q.From, Alias: q.Alias, Seat: q.Seat}
 			// a pool's own windows stand in for the models' drawing on it,
 			// as the usage page shows them
 			for _, w := range PooledWindows(q.Windows) {

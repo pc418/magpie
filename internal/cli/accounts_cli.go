@@ -276,7 +276,7 @@ func accountsCmd(args []string) error {
 			line += "  " + quotaCell(w, now)
 		}
 		if r.Balance != "" {
-			line += "  " + balanceCell(r.Balance, r.Agent, r.User)
+			line += "  " + balanceCell(r.Balance, nil, r.Agent, r.User)
 		}
 		if r.Resets != nil {
 			line += "  " + resetsCell(r.Resets, r.Agent, r.User)

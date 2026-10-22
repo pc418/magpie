@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -109,5 +110,44 @@ func TestBalanceTextLeft(t *testing.T) {
 	money := SubscriptionQuota{Balance: "$2.00"}
 	if got := BalanceText(money, true, "left"); got != "$2.00" {
 		t.Errorf("money: %q", got)
+	}
+}
+
+// A line says " left" after a balance's money, a count or "—", never
+// after an amount asked as a percent, which is what was used: that one
+// reads bare with Used on and "{n}% left" with Left on.
+func TestBalanceLine(t *testing.T) {
+	daily, used := 8.9, 90.0
+	pct := BalancePart{Label: "Daily", Text: "8.9%", Percent: &daily}
+	for _, c := range []struct {
+		name, balance string
+		parts         []BalancePart
+		left          bool
+		want          string
+	}{
+		{"money", "¥12.30", nil, false, "¥12.30 left"},
+		{"money, left on", "¥12.30", nil, true, "¥12.30 left"},
+		{"several money", "Balance $2.00 · Today $2.50", []BalancePart{{Label: "Balance", Text: "$2.00"}, {Label: "Today", Text: "$2.50"}}, false, "Balance $2.00 · Today $2.50 left"},
+		{"percent alone", "Daily 8.9%", []BalancePart{pct}, false, "Daily 8.9%"},
+		{"percent alone, left on", "Daily 8.9%", []BalancePart{pct}, true, "Daily 91.1% left"},
+		{"percent then money", "Daily 8.9% · $70.00", []BalancePart{pct, {Text: "$70.00"}}, false, "Daily 8.9% · $70.00 left"},
+		{"percent then money, left on", "Daily 8.9% · $70.00", []BalancePart{pct, {Text: "$70.00"}}, true, "Daily 91.1% left · $70.00 left"},
+		{"money then percent", "Balance $2.00 · Used 90%", []BalancePart{{Label: "Balance", Text: "$2.00"}, {Label: "Used", Text: "90%", Percent: &used}}, false, "Balance $2.00 · Used 90%"},
+		{"money then percent, left on", "Balance $2.00 · Used 90%", []BalancePart{{Label: "Balance", Text: "$2.00"}, {Label: "Used", Text: "90%", Percent: &used}}, true, "Balance $2.00 · Used 10% left"},
+		{"percent then —", "Daily 8.9% · Month —", []BalancePart{pct, {Label: "Month", Text: "—", Error: "Month: none"}}, false, "Daily 8.9% · Month — left"},
+	} {
+		figure, word := BalanceLine(c.balance, c.parts, c.left)
+		if got := figure + word; got != c.want {
+			t.Errorf("%s: %q, want %q", c.name, got, c.want)
+		}
+	}
+	// magpie quota's card carries the parts, and --json and the gateway
+	// tell the balance as they did, without them
+	r := quotaReport(nil, nil, []SubscriptionQuota{{Provider: "relay", Name: "Relay", Balance: "Daily 8.9%", BalanceParts: []BalancePart{pct}}}, time.Now())
+	if len(r) != 1 || len(r[0].BalanceParts) != 1 || r[0].BalanceParts[0].Percent == nil {
+		t.Fatalf("parts not carried: %+v", r)
+	}
+	if b, _ := json.Marshal(r[0]); strings.Contains(string(b), "balanceParts") || strings.Contains(string(b), "percent") {
+		t.Errorf("sent: %s", b)
 	}
 }

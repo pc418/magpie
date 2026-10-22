@@ -624,10 +624,30 @@ func joinBalanceParts(parts []BalancePart) string {
 // ("Daily 91.1%"), word after it ("left" where nothing else says which).
 // Balance itself otherwise.
 func BalanceText(q SubscriptionQuota, left bool, word string) string {
-	if !left || !slices.ContainsFunc(q.BalanceParts, func(p BalancePart) bool { return p.Percent != nil }) {
-		return q.Balance
+	return balanceTurned(q.Balance, q.BalanceParts, left, word)
+}
+
+// BalanceLine is a balance as a line of text says it, its figure and the
+// word after it apart for styling. Money, a count or "—" at the line's
+// end is followed by " left", as it always was. An amount asked as a
+// percent is what was used, so it never is: it reads bare where what is
+// used is shown, "91.1% left" where what is left is (left). The TUI's
+// Usage page passes its Used / Left; magpie quota, whose % is what is
+// used, passes false.
+func BalanceLine(balance string, parts []BalancePart, left bool) (figure, word string) {
+	figure = balanceTurned(balance, parts, left, "left")
+	if n := len(parts); n > 0 && parts[n-1].Percent != nil {
+		return figure, ""
 	}
-	parts := slices.Clone(q.BalanceParts)
+	return figure, " left"
+}
+
+// balanceTurned is BalanceText's line from the balance and its parts.
+func balanceTurned(balance string, parts []BalancePart, left bool, word string) string {
+	if !left || !slices.ContainsFunc(parts, func(p BalancePart) bool { return p.Percent != nil }) {
+		return balance
+	}
+	parts = slices.Clone(parts)
 	for i, p := range parts {
 		if p.Percent == nil {
 			continue

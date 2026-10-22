@@ -13474,7 +13474,7 @@ function accountQuota(data, user, capFor = () => 0, settable = null) {
   }
   if (q.balance) {
     const balance = el("span", "aq-w aq-balance");
-    balance.title = t("What is left on the account besides its windows");
+    balance.title = balanceWhy(q, "What is left on the account besides its windows");
     balance.append(el("span", "aq-n", t("Balance")), el("b", "", balanceText(q)));
     line.append(balance);
   }
@@ -17864,7 +17864,7 @@ function fitQuota(g) {
 function balanceRow(sub, why, when = true) {
   const parts = balanceShown(sub);
   const b = el("div", "quota-balance" + (parts?.length ? " parts" : ""));
-  b.title = t(why);
+  b.title = balanceWhy(sub, why);
   if (!parts?.length) b.append(el("span", "", t("Balance")), el("b", "", sub.balance));
   for (const [i, p] of (parts || []).entries()) {
     const row = el("div", "bal-part" + (i ? "" : " lead"));
@@ -17915,6 +17915,11 @@ function balanceText(q) {
 // percent, which Used / Left turns.
 function balancePercent(q) {
   return !!q.balanceParts?.some((p) => p.percent != null);
+}
+// balanceWhy: a balance's tooltip, why, but for one with a percent, which
+// is what was used, not "what is left"
+function balanceWhy(q, why) {
+  return t(balancePercent(q) ? "The account's balance field as read: a percent shows what is used or left, as Used / Left says" : why);
 }
 
 // readWhen: when a card's figures were read, quietly under them: "As of
@@ -18145,8 +18150,7 @@ function quotaWindows(sub) {
     return e;
   };
   if (sub.balance && !sub.windows?.length) {
-    const b = balanceRow(sub, balancePercent(sub) ? "The account's balance field as read: a percent shows what is used or left, as Used / Left says"
-      : "What is left on the account: the vendor tells only this, so Used / Left leaves it as it is", "refresh");
+    const b = balanceRow(sub, "What is left on the account: the vendor tells only this, so Used / Left leaves it as it is", "refresh");
     if (!sub.error) return b;
     // the balance read, and why the rest wasn't: a ClinePass card whose
     // limits failed to read (#79) says so under its balance
