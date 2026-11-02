@@ -41,6 +41,13 @@ func codeBytes(b []byte) int {
 	return n
 }
 
+// ownCarry is what the own branch's commits add to the core's scripts
+// (the ChatGPT own-prompt Settings row, the balance percent's Used / Left
+// helpers), on top of upstream's budgets, which upstream sets to the byte
+// after nearly every change. Kept apart from those constants so a rebase
+// never meets them.
+const ownCarry = 4096
+
 func TestCoreScriptBudget(t *testing.T) {
 	page, err := os.ReadFile("assets/index.html")
 	if err != nil {
@@ -60,7 +67,7 @@ func TestCoreScriptBudget(t *testing.T) {
 			t.Fatal(err)
 		}
 		code := codeBytes(b)
-		if name == "app.js" && code > appScriptBudget {
+		if name == "app.js" && code > appScriptBudget+ownCarry {
 			t.Errorf("app.js is %d bytes of code, over its budget of %d: put the page's code in its plugin, or raise the budget and say why (comments aren't counted, so cutting them doesn't help)", code, appScriptBudget)
 		}
 		total += code
@@ -69,7 +76,7 @@ func TestCoreScriptBudget(t *testing.T) {
 	if n < 5 {
 		t.Fatalf("found only %d core scripts in index.html", n)
 	}
-	if total > coreScriptBudget {
+	if total > coreScriptBudget+ownCarry {
 		t.Errorf("the core's scripts are %d bytes of code, over their budget of %d: put the page's code in its plugin, or raise the budget and say why (comments aren't counted, so cutting them doesn't help)", total, coreScriptBudget)
 	}
 }
