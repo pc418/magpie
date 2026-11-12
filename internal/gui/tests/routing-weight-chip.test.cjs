@@ -4,7 +4,7 @@
 // back to Smart's for a trace whose keys route by weight. The chip now
 // reads By weight — the provider editor's own words, already spoken in
 // every language — and the story says whose share went first, while keys
-// under Smart still say Smart. Keys under Weekly pace whose windows
+// under Smart still say Smart. Keys under Use before expiry whose windows
 // aren't known have no pace, so the story says they go in their order,
 // not by the tokens sent them (2026-10-20: pace weighs no tokens). In English, Chinese, Japanese and
 // German.
@@ -56,7 +56,7 @@ function serve(lang, scene) {
 
 const chip = { en: "By weight", zh: "按权重", ja: "重み付け", de: "Nach Gewicht" };
 const smart = { en: "Smart", zh: "智能", ja: "スマート", de: "Intelligent" };
-const pace = { en: "Weekly pace", zh: "重置前用完", ja: "週ペース", de: "Wochentempo" };
+const pace = { en: "Use before expiry", zh: "按配速", ja: "期限前に使い切る", de: "Vor Ablauf aufbrauchen" };
 
 for (const engine of (process.env.BROWSER ? [process.env.BROWSER] : ["chromium", "webkit"])) {
   for (const lang of ["en", "zh", "ja", "de"]) {
@@ -112,7 +112,7 @@ for (const engine of (process.env.BROWSER ? [process.env.BROWSER] : ["chromium",
       assert.deepEqual(errors, []);
     });
 
-    test(`${engine} ${lang}: keys under Weekly pace go in their order`, async (t) => {
+    test(`${engine} ${lang}: keys under Use before expiry go in their order`, async (t) => {
       const browser = await (engine === "webkit" ? webkit.launch() : chromium.launch({ channel: "chromium" }));
       t.after(() => browser.close());
       const page = await browser.newPage({ viewport: { width: 1100, height: 900 }, reducedMotion: "reduce" });
@@ -128,7 +128,7 @@ for (const engine of (process.env.BROWSER ? [process.env.BROWSER] : ["chromium",
       assert.equal((await page.locator(".rt-hub i").textContent()).trim(), pace[lang]);
       const say = (key, vars = {}) => page.evaluate(([lang, key, vars]) => ((lang !== "en" && I18N[lang]?.[key]) || key).replace(/\{(\w+)\}/g, (_, k) => vars[k]), [lang, key, vars]);
       assert.equal((await page.locator(".rt-mode").textContent()).trim(),
-        await say("Weekly pace: the account with the most of its week left per hour until it renews goes first — the one with the most to lose at its reset; an account with five hours and no week by what its five hours have left per hour. One all but used up waits until nothing else can answer; a key by the usage windows it reads, else in its order."));
+        await say("Use before expiry: the account with the most left per hour until it is lost goes first — at its reset, or, when credits in it expire sooner, by those that expire first; an account with five hours and no week by what its five hours have left per hour. One all but used up waits until nothing else can answer; a key by the usage windows it reads, else in its order."));
       await page.locator(".rt-steps li.why").first().waitFor();
       assert.equal((await page.locator(".rt-steps li.why").first().textContent()).trim(),
         await say(scenes.pace.why, { who: "relay-a" }));
