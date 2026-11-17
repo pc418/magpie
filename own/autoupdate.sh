@@ -8,6 +8,11 @@
 #   own/autoupdate.sh uninstall             unload and remove that agent
 #   own/autoupdate.sh run [--app PATH]      one check, what the agent runs
 #
+# A program at ~/Library/Application Support/magpie-own/guard, when install
+# finds one, is what the agent starts. It gets the run's command as its
+# arguments, runs it and passes its exit status on: a place for a tool that
+# keeps a note of a run that failed. uninstall leaves it.
+#
 # A run, under a lock:
 # 1. stops when a run installed a build today (the local day);
 # 2. finds the newest own-* release of pc418/magpie (or $MAGPIE_OWN_REPO)
@@ -36,6 +41,7 @@ SUPPORT=${MAGPIE_OWN_HOME:-$HOME/Library/Application Support/magpie-own}
 LABEL=local.magpie-own.autoupdate
 AGENT=$HOME/Library/LaunchAgents/$LABEL.plist
 LOG=$SUPPORT/autoupdate.log
+GUARD=$SUPPORT/guard
 LAUNCHCTL=${LAUNCHCTL:-launchctl}
 RELEASES=${MAGPIE_OWN_RELEASES_URL:-https://api.github.com/repos/$REPO/releases?per_page=100}
 INSTALL=${MAGPIE_OWN_INSTALL:-$(cd "$(dirname "$0")" && pwd)/install.sh}
@@ -55,7 +61,7 @@ log() {
 }
 
 usage() {
-	sed -n '2,31p' "$0" | sed 's/^# \{0,1\}//'
+	sed -n '2,34p' "$0" | sed 's/^# \{0,1\}//'
 }
 
 MODE=${1:-}
@@ -119,6 +125,11 @@ install_agent() {
 	if [ -n "${MAGPIE_OWN_REPO:-}" ]; then
 		env+="		<key>MAGPIE_OWN_REPO</key><string>$(xml "$MAGPIE_OWN_REPO")</string>"$'\n'
 	fi
+	# a guard beside the copies starts the run (see the top of this file)
+	local guard=""
+	if [ -f "$GUARD" ] && [ -x "$GUARD" ]; then
+		guard="		<string>$(xml "$GUARD")</string>"$'\n'
+	fi
 	cat >"$AGENT.new" <<EOF
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -127,7 +138,7 @@ install_agent() {
 	<key>Label</key><string>$LABEL</string>
 	<key>ProgramArguments</key>
 	<array>
-		<string>/bin/bash</string>
+$guard		<string>/bin/bash</string>
 		<string>$(xml "$SUPPORT/autoupdate.sh")</string>
 		<string>run</string>
 	</array>
@@ -150,6 +161,7 @@ EOF
 	"$LAUNCHCTL" bootstrap "gui/$(id -u)" "$AGENT" || die "couldn't load $AGENT"
 	echo "Installed: $LABEL runs $SUPPORT/autoupdate.sh every $((INTERVAL / 60)) minutes for $APP"
 	echo "Log: $LOG"
+	[ -z "$guard" ] || echo "Each run starts through $GUARD"
 }
 
 uninstall_agent() {

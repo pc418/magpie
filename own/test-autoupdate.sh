@@ -373,6 +373,43 @@ check "the copies gone" bash -c "[ ! -e '$SUPPORT/autoupdate.sh' ] && [ ! -e '$S
 echo "    launchctl calls:"
 show "$T/launchctl.log"
 
+echo "16. a guard in the support folder is what the agent starts"
+reset "$NEW"
+GUARD=$SUPPORT/guard
+mkdir -p "$SUPPORT"
+: >"$T/guard.log"
+cat >"$GUARD" <<EOF
+#!/bin/sh
+echo "\$*" >>"$T/guard.log"
+exec "\$@"
+EOF
+arg() { plutil -extract "ProgramArguments.$1" raw -o - "$PLIST"; }
+check "install exits 0" aue LAUNCHCTL="$T/launchctl" -- install --app "$APP"
+check "a guard that can't be run is not used" [ "$(arg 0)" = /bin/bash ]
+chmod +x "$GUARD"
+check "install exits 0" aue LAUNCHCTL="$T/launchctl" -- install --app "$APP"
+show "$T/out"
+check "says so" grep -qF "Each run starts through $GUARD" "$T/out"
+check "the plist is valid" plutil -lint "$PLIST"
+check "the agent starts the guard" [ "$(arg 0)" = "$GUARD" ]
+check "with the run as its arguments" [ "$(arg 1) | $(arg 2) | $(arg 3)" = "/bin/bash | $SUPPORT/autoupdate.sh | run" ]
+check "and nothing after them" bash -c "! plutil -extract ProgramArguments.4 raw -o - '$PLIST' >/dev/null 2>&1"
+asagent() { env PATH="$LPATH" "$(arg 0)" "$(arg 1)" "$(arg 2)" "$(arg 3)" >"$T/out" 2>&1; }
+check "run as the agent runs it exits 0" asagent
+show "$T/out"
+check "through the guard" [ "$(cat "$T/guard.log")" = "/bin/bash $SUPPORT/autoupdate.sh run" ]
+check "the run did its check" grep -q "the newest build is $NEW" "$T/out"
+rm -f "$T/releases.json"
+check "a run that fails passes its status on" bash -c "! env PATH='$LPATH' '$GUARD' /bin/bash '$SUPPORT/autoupdate.sh' run >'$T/out' 2>&1"
+show "$T/out"
+echo "[$R2,$R1]" >"$T/releases.json"
+check "uninstall exits 0" aue LAUNCHCTL="$T/launchctl" -- uninstall
+check "the guard stays" [ -x "$GUARD" ]
+rm -f "$GUARD"
+check "without one, install goes back to bash" aue LAUNCHCTL="$T/launchctl" -- install --app "$APP"
+check "the agent starts bash" [ "$(arg 0) | $(arg 1) | $(arg 2)" = "/bin/bash | $SUPPORT/autoupdate.sh | run" ]
+check "uninstall exits 0" aue LAUNCHCTL="$T/launchctl" -- uninstall
+
 echo
 echo "passed $PASSED, failed $FAILED"
 [ "$FAILED" -eq 0 ]
